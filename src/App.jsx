@@ -205,7 +205,7 @@ function AuthPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-logo">Cursódromo</div>
+        <div className="auth-logo">Portfolio AAARBA</div>
         <div className="auth-sub">Plataforma de entregas y evaluaciones</div>
         <div className="auth-tabs">
           <button className={`auth-tab ${tab === "login" ? "active" : ""}`} onClick={() => setTab("login")}>Ingresar</button>
@@ -1034,7 +1034,7 @@ function Navbar({ profile }) {
   async function logout() { await supabase.auth.signOut(); }
   return (
     <nav className="nav">
-      <div className="nav-brand">Cursódromo</div>
+      <div className="nav-brand">Portfolio AAARBA</div>
       <div className="nav-right">
         {profile && <><span className="nav-user">{profile.nombre}</span><span className={`nav-role ${profile.rol}`}>{profile.rol}</span></>}
         <button className="btn btn-ghost btn-sm" onClick={logout}>Salir</button>

@@ -131,6 +131,14 @@ const CSS = `
   .modal-comment { font-size:13px; color:var(--text2); padding:10px 14px; background:var(--bg3); border-radius:var(--radius); border-left:2px solid var(--border2); }
   /* Subir form */
   .subir-form { background:var(--bg3); border:1px dashed var(--border2); border-radius:var(--radius); padding:14px; }
+  .tipo-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; }
+  .tipo-badge-video { background:rgba(96,165,250,0.1); color:var(--blue); border:1px solid rgba(96,165,250,0.2); }
+  .tipo-badge-imagen { background:rgba(45,212,191,0.1); color:var(--teal); border:1px solid rgba(45,212,191,0.2); }
+  .imagen-preview { width:100%; max-height:320px; object-fit:contain; border-radius:var(--radius); background:var(--bg3); display:block; cursor:zoom-in; }
+  .imagen-thumb { width:64px; height:36px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+  .upload-area { border:2px dashed var(--border2); border-radius:var(--radius); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.2s; }
+  .upload-area:hover { border-color:var(--accent2); }
+  .upload-area.has-file { border-style:solid; border-color:var(--accent2); background:rgba(232,213,163,0.04); }
   /* Auth */
   .auth-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
   .auth-card { width:100%; max-width:420px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px; }
@@ -236,11 +244,12 @@ function AuthPage() {
   );
 }
 
-// ── Video Modal ────────────────────────────────────────────
+// ── Video/Imagen Modal ─────────────────────────────────────
 function VideoModal({ entrega, profile, onClose, onEvaluar }) {
   const [comentario, setComentario] = useState(entrega.comentario_docente || "");
   const [loading, setLoading] = useState(false);
   const canEvaluar = profile?.rol === "docente" && entrega.estado === "pendiente";
+  const esImagen = !!entrega.imagen_url;
 
   async function evaluar(estado) {
     setLoading(true);
@@ -260,9 +269,13 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-video">
-          <div className="modal-iframe-wrap">
-            <iframe src={`https://www.youtube.com/embed/${entrega.youtube_id}?autoplay=1&rel=0`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-          </div>
+          {esImagen ? (
+            <img src={entrega.imagen_url} alt={entrega.titulo} style={{ width: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 8, background: "var(--bg3)", display: "block" }} />
+          ) : (
+            <div className="modal-iframe-wrap">
+              <iframe src={`https://www.youtube.com/embed/${entrega.youtube_id}?autoplay=1&rel=0`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
+          )}
         </div>
         <div className="modal-actions">
           {entrega.descripcion && <p style={{ fontSize: 13, color: "var(--text2)" }}>{entrega.descripcion}</p>}
@@ -289,36 +302,93 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
   );
 }
 
-// ── Subir video form (alumno) ──────────────────────────────
+// ── Subir entrega (video o imagen según tipo de tarea) ─────
 function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
-  const [url, setUrl] = useState(""); const [titulo, setTitulo] = useState(""); const [descripcion, setDescripcion] = useState("");
-  const [loading, setLoading] = useState(false); const [msg, setMsg] = useState(null); const [abierto, setAbierto] = useState(false);
+  const [url, setUrl] = useState("");
+  const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [archivo, setArchivo] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [abierto, setAbierto] = useState(false);
+  const esImagen = tarea.tipo === "imagen";
+
+  function handleArchivo(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setMsg({ type: "error", text: "Solo se aceptan imágenes (JPG, PNG, etc.)" });
+    if (file.size > 5 * 1024 * 1024) return setMsg({ type: "error", text: "La imagen no puede superar 5MB" });
+    setArchivo(file); setPreview(URL.createObjectURL(file)); setMsg(null);
+  }
 
   async function handleSubmit(e) {
-    e.preventDefault(); setMsg(null);
-    const ytId = extractYoutubeId(url);
-    if (!ytId) return setMsg({ type: "error", text: "URL de YouTube inválida" });
-    setLoading(true);
-    const { error } = await supabase.from("entregas").insert({
-      alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
-      equipo_id: equipoId || null,
-      titulo: titulo || tarea.titulo, descripcion, youtube_url: url, youtube_id: ytId,
-    });
-    if (error) setMsg({ type: "error", text: error.message });
-    else { setAbierto(false); setUrl(""); setTitulo(""); setDescripcion(""); onGuardado(); }
+    e.preventDefault(); setMsg(null); setLoading(true);
+    if (esImagen) {
+      if (!archivo) { setMsg({ type: "error", text: "Seleccioná una imagen" }); setLoading(false); return; }
+      const ext = archivo.name.split(".").pop();
+      const path = `${alumnoId}/${tarea.id}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("entregas-imagenes").upload(path, archivo);
+      if (uploadError) { setMsg({ type: "error", text: uploadError.message }); setLoading(false); return; }
+      const { data: urlData } = supabase.storage.from("entregas-imagenes").getPublicUrl(path);
+      const { error } = await supabase.from("entregas").insert({
+        alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
+        equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
+        imagen_url: urlData.publicUrl, youtube_url: null, youtube_id: null,
+      });
+      if (error) setMsg({ type: "error", text: error.message });
+      else { setAbierto(false); setArchivo(null); setPreview(null); setTitulo(""); setDescripcion(""); onGuardado(); }
+    } else {
+      const ytId = extractYoutubeId(url);
+      if (!ytId) { setMsg({ type: "error", text: "URL de YouTube inválida" }); setLoading(false); return; }
+      const { error } = await supabase.from("entregas").insert({
+        alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
+        equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
+        youtube_url: url, youtube_id: ytId, imagen_url: null,
+      });
+      if (error) setMsg({ type: "error", text: error.message });
+      else { setAbierto(false); setUrl(""); setTitulo(""); setDescripcion(""); onGuardado(); }
+    }
     setLoading(false);
   }
-  if (!abierto) return <button className="btn btn-primary btn-sm" onClick={() => setAbierto(true)}>+ Subir video</button>;
+
+  if (!abierto) return (
+    <button className="btn btn-primary btn-sm" onClick={() => setAbierto(true)}>
+      + Subir {esImagen ? "imagen" : "video"}
+    </button>
+  );
+
   return (
     <div className="subir-form">
       <Msg msg={msg} />
       <form onSubmit={handleSubmit}>
-        <div className="form-group"><label className="form-label">Link de YouTube</label><input className="form-input" type="url" placeholder="https://youtube.com/watch?v=..." value={url} onChange={e => setUrl(e.target.value)} required /></div>
+        {esImagen ? (
+          <div className="form-group">
+            <label className="form-label">Imagen</label>
+            <label className={`upload-area ${archivo ? "has-file" : ""}`}>
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleArchivo} />
+              {preview ? (
+                <img src={preview} alt="preview" style={{ maxHeight: 160, maxWidth: "100%", objectFit: "contain", borderRadius: 6 }} />
+              ) : (
+                <div>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+                  <div style={{ fontSize: 14, color: "var(--text2)" }}>Clic para seleccionar imagen</div>
+                  <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>JPG, PNG, WEBP · máx 5MB</div>
+                </div>
+              )}
+            </label>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label">Link de YouTube</label>
+            <input className="form-input" type="url" placeholder="https://youtube.com/watch?v=..." value={url} onChange={e => setUrl(e.target.value)} required />
+          </div>
+        )}
         <div className="form-group"><label className="form-label">Título (opcional)</label><input className="form-input" type="text" placeholder={tarea.titulo} value={titulo} onChange={e => setTitulo(e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Comentario (opcional)</label><textarea className="form-textarea" value={descripcion} onChange={e => setDescripcion(e.target.value)} style={{ minHeight: 56 }} /></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-primary btn-sm" disabled={loading}>{loading ? <><Spinner /> Enviando...</> : "Enviar"}</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierto(false)}>Cancelar</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setAbierto(false); setPreview(null); setArchivo(null); }}>Cancelar</button>
         </div>
       </form>
     </div>
@@ -328,11 +398,24 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
 // ── Tarea card (alumno) ────────────────────────────────────
 function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVerVideo }) {
   const vencida = isVencida(tarea.fecha_limite) && !entrega;
+  const esImagen = tarea.tipo === "imagen";
+
+  function thumbSrc() {
+    if (!entrega) return null;
+    if (esImagen) return entrega.imagen_url;
+    return `https://img.youtube.com/vi/${entrega.youtube_id}/mqdefault.jpg`;
+  }
+
   return (
     <div className="tarea-card">
       <div className="tarea-header">
         <div style={{ flex: 1 }}>
-          <div className="tarea-titulo">{tarea.titulo}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div className="tarea-titulo">{tarea.titulo}</div>
+            <span className={`tipo-badge ${esImagen ? "tipo-badge-imagen" : "tipo-badge-video"}`}>
+              {esImagen ? "🖼️ Imagen" : "▶ Video"}
+            </span>
+          </div>
           {tarea.descripcion && <div className="tarea-desc">{tarea.descripcion}</div>}
           {tarea.fecha_limite && <div className="tarea-meta" style={{ color: vencida ? "var(--red)" : "var(--text3)" }}>⏰ {vencida ? "Venció" : "Vence"}: {formatDatetime(tarea.fecha_limite)}</div>}
         </div>
@@ -344,7 +427,7 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
         {entrega ? (
           <>
             <div className="tarea-entrega-preview" onClick={() => onVerVideo(entrega)}>
-              <img src={`https://img.youtube.com/vi/${entrega.youtube_id}/mqdefault.jpg`} alt="" style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
+              <img src={thumbSrc()} alt="" style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entrega.titulo}</div>
                 <div style={{ fontSize: 12, color: "var(--text2)" }}>Subido el {formatDate(entrega.created_at)} · clic para ver</div>
@@ -641,7 +724,7 @@ function TabModulos({ cursos, modulos, tareas, reload }) {
 
 // ── ABM Tareas ─────────────────────────────────────────────
 function TabTareas({ cursos, modulos, tareas, reload }) {
-  const [form, setForm] = useState({ titulo: "", descripcion: "", curso_id: cursos[0]?.id || "", modulo_id: "", fecha_limite: "" });
+  const [form, setForm] = useState({ titulo: "", descripcion: "", curso_id: cursos[0]?.id || "", modulo_id: "", fecha_limite: "", tipo: "video" });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
   const [filterModulo, setFilterModulo] = useState("todos");
@@ -659,15 +742,17 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
       curso_id: form.curso_id, docente_id: u.id,
       modulo_id: form.modulo_id || null,
       fecha_limite: form.fecha_limite || null,
+      tipo: form.tipo,
     });
     if (error) setMsg({ type: "error", text: error.message });
-    else { setMsg({ type: "success", text: "Tarea creada" }); setForm(f => ({ ...f, titulo: "", descripcion: "", modulo_id: "", fecha_limite: "" })); reload(); }
+    else { setMsg({ type: "success", text: "Tarea creada" }); setForm(f => ({ ...f, titulo: "", descripcion: "", modulo_id: "", fecha_limite: "", tipo: "video" })); reload(); }
     setLoading(false);
   }
   async function editar(id, vals) {
     const { error } = await supabase.from("tareas").update({
       titulo: vals.titulo, descripcion: vals.descripcion || null,
       modulo_id: vals.modulo_id || null, fecha_limite: vals.fecha_limite || null,
+      tipo: vals.tipo || "video",
     }).eq("id", id);
     if (!error) reload();
   }
@@ -709,6 +794,7 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
       <EditableRow key={t.id}
         fields={[
           { key: "titulo", label: "Título", value: t.titulo },
+          { key: "tipo", label: "Tipo", value: t.tipo || "video", type: "select", options: [{ value: "video", label: "▶ Video (YouTube)" }, { value: "imagen", label: "🖼️ Imagen (archivo)" }] },
           { key: "descripcion", label: "Consigna", value: t.descripcion, type: "textarea" },
           { key: "modulo_id", label: "Módulo", value: t.modulo_id || "", type: "select", options: [{ value: "", label: "Sin módulo" }, ...modulosDelCursoT.map(m => ({ value: m.id, label: m.nombre }))] },
           { key: "fecha_limite", label: "Fecha límite", value: t.fecha_limite ? new Date(t.fecha_limite).toISOString().slice(0, 16) : "", type: "datetime-local" },
@@ -717,10 +803,13 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
         onDelete={() => eliminar(t.id)}
         deleteConfirm="¿Eliminar esta tarea y sus entregas?"
       >
-        <div className="item-row-title">{t.titulo}</div>
-        
-        <div className="item-row-sub">{t.descripcion}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
-      
+        <div className="item-row-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {t.titulo}
+          <span className={`tipo-badge ${t.tipo === "imagen" ? "tipo-badge-imagen" : "tipo-badge-video"}`}>
+            {t.tipo === "imagen" ? "🖼️ Imagen" : "▶ Video"}
+          </span>
+        </div>
+        <div className="item-row-sub">{curso?.nombre}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
       </EditableRow>
     );
   }
@@ -734,6 +823,7 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
         <form onSubmit={crear}>
           <div className="form-group"><label className="form-label">Curso</label><select className="form-select" value={form.curso_id} onChange={e => { set("curso_id", e.target.value); set("modulo_id", ""); }} required>{cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Módulo (opcional)</label><select className="form-select" value={form.modulo_id} onChange={e => set("modulo_id", e.target.value)}><option value="">Sin módulo</option>{modulosDelCurso.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Tipo de entrega</label><select className="form-select" value={form.tipo} onChange={e => set("tipo", e.target.value)}><option value="video">▶ Video (YouTube)</option><option value="imagen">🖼️ Imagen (archivo)</option></select></div>
           <div className="form-group"><label className="form-label">Título</label><input className="form-input" type="text" placeholder="Ej: TP1 — Video presentación" value={form.titulo} onChange={e => set("titulo", e.target.value)} required /></div>
           <div className="form-group"><label className="form-label">Consigna (opcional)</label><textarea className="form-textarea" value={form.descripcion} onChange={e => set("descripcion", e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Fecha límite (opcional)</label><input className="form-input" type="datetime-local" value={form.fecha_limite} onChange={e => set("fecha_limite", e.target.value)} /></div>
@@ -977,7 +1067,9 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
                 const equipo = equipos.find(eq => eq.id === entrega.equipo_id);
                 return (
                   <div key={entrega.id} className="entrega-row" onClick={() => setSelected({ ...entrega, equipo: equipo?.nombre })}>
-                    <img className="entrega-row-thumb" src={`https://img.youtube.com/vi/${entrega.youtube_id}/mqdefault.jpg`} alt="" loading="lazy" />
+                    <img className="entrega-row-thumb"
+                      src={entrega.imagen_url || `https://img.youtube.com/vi/${entrega.youtube_id}/mqdefault.jpg`}
+                      alt="" loading="lazy" />
                     <div className="entrega-row-info">
                       <div className="entrega-row-name">{entrega.profiles?.nombre || "Alumno"}</div>
                       <div className="entrega-row-sub">

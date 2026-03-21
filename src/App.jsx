@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,6 +24,39 @@ function formatDatetime(d) {
   return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function isVencida(f) { return f ? new Date(f) < new Date() : false; }
+
+// Resuelve qué docente corresponde a una entrega según la matriz de asignaciones
+async function resolveDocente(cursoId, equipoId, moduloId) {
+  // 1. Buscar match exacto equipo + módulo
+  const { data: exacto } = await supabase.from("asignaciones")
+    .select("docente_id").eq("curso_id", cursoId)
+    .eq("equipo_id", equipoId || null).eq("modulo_id", moduloId || null).maybeSingle();
+  if (exacto) return exacto.docente_id;
+
+  // 2. Match solo por equipo (cualquier módulo → default de ese equipo)
+  if (equipoId) {
+    const { data: porEquipo } = await supabase.from("asignaciones")
+      .select("docente_id").eq("curso_id", cursoId)
+      .eq("equipo_id", equipoId).is("modulo_id", null).maybeSingle();
+    if (porEquipo) return porEquipo.docente_id;
+  }
+
+  // 3. Match solo por módulo (cualquier equipo → default de ese módulo)
+  if (moduloId) {
+    const { data: porModulo } = await supabase.from("asignaciones")
+      .select("docente_id").eq("curso_id", cursoId)
+      .is("equipo_id", null).eq("modulo_id", moduloId).maybeSingle();
+    if (porModulo) return porModulo.docente_id;
+  }
+
+  // 4. Default general del curso
+  const { data: defecto } = await supabase.from("asignaciones")
+    .select("docente_id").eq("curso_id", cursoId)
+    .eq("es_default", true).maybeSingle();
+  if (defecto) return defecto.docente_id;
+
+  return null;
+}
 
 // ── Auth Context ───────────────────────────────────────────
 const AuthCtx = createContext(null);
@@ -139,6 +173,15 @@ const CSS = `
   .upload-area { border:2px dashed var(--border2); border-radius:var(--radius); padding:24px; text-align:center; cursor:pointer; transition:border-color 0.2s; }
   .upload-area:hover { border-color:var(--accent2); }
   .upload-area.has-file { border-style:solid; border-color:var(--accent2); background:rgba(232,213,163,0.04); }
+  /* Matriz de asignaciones */
+  .matrix-wrap { overflow-x:auto; }
+  .matrix-table { border-collapse:collapse; width:100%; min-width:500px; font-size:13px; }
+  .matrix-table th { background:var(--bg3); color:var(--text2); font-weight:500; padding:8px 12px; border:1px solid var(--border2); text-align:center; white-space:nowrap; }
+  .matrix-table th.row-header { text-align:left; min-width:120px; }
+  .matrix-table td { border:1px solid var(--border); padding:4px 6px; vertical-align:middle; }
+  .matrix-table td select { background:var(--bg3); border:1px solid var(--border2); border-radius:6px; padding:4px 8px; color:var(--text); font-size:12px; font-family:inherit; outline:none; width:100%; min-width:130px; cursor:pointer; }
+  .matrix-table td select:focus { border-color:var(--accent2); }
+  .matrix-default-row td { background:rgba(232,213,163,0.03); }
   /* Auth */
   .auth-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
   .auth-card { width:100%; max-width:420px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px; }
@@ -324,6 +367,11 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
 
   async function handleSubmit(e) {
     e.preventDefault(); setMsg(null); setLoading(true);
+
+    // Resolver módulo de la tarea para buscar asignación
+    const moduloId = tarea.modulo_id || null;
+    const docenteId = await resolveDocente(tarea.curso_id, equipoId || null, moduloId);
+
     if (esImagen) {
       if (!archivo) { setMsg({ type: "error", text: "Seleccioná una imagen" }); setLoading(false); return; }
       const ext = archivo.name.split(".").pop();
@@ -335,6 +383,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
         alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
         equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
         imagen_url: urlData.publicUrl, youtube_url: null, youtube_id: null,
+        docente_asignado_id: docenteId,
       });
       if (error) setMsg({ type: "error", text: error.message });
       else { setAbierto(false); setArchivo(null); setPreview(null); setTitulo(""); setDescripcion(""); onGuardado(); }
@@ -345,6 +394,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
         alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
         equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
         youtube_url: url, youtube_id: ytId, imagen_url: null,
+        docente_asignado_id: docenteId,
       });
       if (error) setMsg({ type: "error", text: error.message });
       else { setAbierto(false); setUrl(""); setTitulo(""); setDescripcion(""); onGuardado(); }
@@ -1109,7 +1159,10 @@ function DocenteView({ profile }) {
       supabase.from("modulos").select("*").order("orden"),
       supabase.from("tareas").select("*").order("created_at"),
       supabase.from("equipos").select("*").order("nombre"),
-      supabase.from("entregas").select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo)").order("created_at", { ascending: false }),
+      supabase.from("entregas")
+        .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo)")
+        .eq("docente_asignado_id", profile.id)
+        .order("created_at", { ascending: false }),
     ]);
     if (c.data) setCursos(c.data);
     if (mod.data) setModulos(mod.data);
@@ -1159,6 +1212,145 @@ function DocenteView({ profile }) {
   );
 }
 
+// ── ABM Asignaciones (matriz equipo x módulo → docente) ────
+function TabAsignaciones({ cursos, equipos, modulos, docentes, reload }) {
+  const [cursoId, setCursoId] = useState(cursos[0]?.id || "");
+  const [asignaciones, setAsignaciones] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [defaultDocente, setDefaultDocente] = useState("");
+
+  const equiposDeCurso = equipos.filter(eq => eq.curso_id === cursoId);
+  const modulosDeCurso = modulos.filter(m => m.curso_id === cursoId);
+
+  useEffect(() => { if (cursos.length && !cursoId) setCursoId(cursos[0].id); }, [cursos]);
+  useEffect(() => { if (cursoId) loadAsignaciones(); }, [cursoId]);
+
+  async function loadAsignaciones() {
+    const { data } = await supabase.from("asignaciones").select("*").eq("curso_id", cursoId);
+    if (data) setAsignaciones(data);
+    const def = data?.find(a => a.es_default);
+    setDefaultDocente(def?.docente_id || "");
+  }
+
+  // Obtener docente asignado para una celda equipo+módulo
+  function getAsignado(equipoId, moduloId) {
+    const a = asignaciones.find(a =>
+      a.equipo_id === equipoId && a.modulo_id === moduloId && !a.es_default
+    );
+    return a?.docente_id || "";
+  }
+
+  // Guardar una celda individual
+  async function setAsignado(equipoId, moduloId, docenteId) {
+    setSaving(true); setMsg(null);
+    // Eliminar asignación existente para esta celda
+    await supabase.from("asignaciones").delete()
+      .eq("curso_id", cursoId).eq("equipo_id", equipoId).eq("modulo_id", moduloId);
+
+    if (docenteId) {
+      const { error } = await supabase.from("asignaciones").insert({
+        curso_id: cursoId, equipo_id: equipoId, modulo_id: moduloId,
+        docente_id: docenteId, es_default: false,
+      });
+      if (error) setMsg({ type: "error", text: error.message });
+    }
+    await loadAsignaciones();
+    setSaving(false);
+  }
+
+  // Guardar docente por defecto del curso
+  async function saveDefault(docenteId) {
+    setSaving(true); setMsg(null);
+    await supabase.from("asignaciones").delete().eq("curso_id", cursoId).eq("es_default", true);
+    if (docenteId) {
+      await supabase.from("asignaciones").insert({
+        curso_id: cursoId, equipo_id: null, modulo_id: null,
+        docente_id: docenteId, es_default: true,
+      });
+    }
+    setDefaultDocente(docenteId);
+    await loadAsignaciones();
+    setSaving(false);
+  }
+
+  if (cursos.length === 0) return <div className="empty"><div className="empty-icon">📋</div><div className="empty-title">Primero creá un curso</div></div>;
+  if (docentes.length === 0) return <div className="empty"><div className="empty-icon">👨‍🏫</div><div className="empty-title">No hay docentes registrados</div></div>;
+
+  return (
+    <div>
+      <Msg msg={msg} />
+
+      {/* Selector de curso */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <div style={{ flex: 1, maxWidth: 300 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Curso</label>
+            <select className="form-select" value={cursoId} onChange={e => setCursoId(e.target.value)}>
+              {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ flex: 1, maxWidth: 300 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Docente por defecto (sin match)</label>
+            <select className="form-select" value={defaultDocente}
+              onChange={e => saveDefault(e.target.value)}>
+              <option value="">— Sin docente por defecto —</option>
+              {docentes.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+            </select>
+          </div>
+        </div>
+        {saving && <span style={{ fontSize: 13, color: "var(--text2)" }}><Spinner /> Guardando...</span>}
+      </div>
+
+      {equiposDeCurso.length === 0 || modulosDeCurso.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">📊</div>
+          <div className="empty-title">Faltan equipos o módulos</div>
+          <div className="empty-sub">Para armar la matriz necesitás al menos un equipo y un módulo en este curso</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>
+            Seleccioná el docente para cada combinación equipo × módulo. Los cambios se guardan automáticamente.
+          </div>
+          <div className="matrix-wrap">
+            <table className="matrix-table">
+              <thead>
+                <tr>
+                  <th className="row-header">Equipo \ Módulo</th>
+                  {modulosDeCurso.map(m => <th key={m.id}>{m.nombre}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {equiposDeCurso.map(eq => (
+                  <tr key={eq.id}>
+                    <td style={{ fontWeight: 500, padding: "8px 12px", background: "var(--bg3)", color: "var(--text)", whiteSpace: "nowrap" }}>
+                      {eq.nombre}
+                    </td>
+                    {modulosDeCurso.map(m => (
+                      <td key={m.id}>
+                        <select
+                          value={getAsignado(eq.id, m.id)}
+                          onChange={e => setAsignado(eq.id, m.id, e.target.value)}
+                        >
+                          <option value="">— Sin asignar —</option>
+                          {docentes.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                        </select>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Admin View (ABMs) ──────────────────────────────────────
 function AdminView({ profile }) {
   const [tab, setTab] = useState("cursos");
@@ -1167,24 +1359,27 @@ function AdminView({ profile }) {
   const [tareas, setTareas] = useState([]);
   const [equipos, setEquipos] = useState([]);
   const [alumnos, setAlumnos] = useState([]);
+  const [docentes, setDocentes] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
-    const [c, mod, t, eq, al] = await Promise.all([
+    const [c, mod, t, eq, al, doc] = await Promise.all([
       supabase.from("cursos").select("*").order("nombre"),
       supabase.from("modulos").select("*").order("orden"),
       supabase.from("tareas").select("*").order("created_at"),
       supabase.from("equipos").select("*").order("nombre"),
       supabase.from("profiles").select("*").eq("rol", "alumno").order("nombre"),
+      supabase.from("profiles").select("*").eq("rol", "docente").order("nombre"),
     ]);
     if (c.data) setCursos(c.data);
     if (mod.data) setModulos(mod.data);
     if (t.data) setTareas(t.data);
     if (eq.data) setEquipos(eq.data);
     if (al.data) setAlumnos(al.data);
+    if (doc.data) setDocentes(doc.data);
     setLoading(false);
   }
 
@@ -1193,6 +1388,7 @@ function AdminView({ profile }) {
     { id: "modulos", label: "Módulos" },
     { id: "tareas", label: "Tareas" },
     { id: "equipos", label: "Equipos" },
+    { id: "asignaciones", label: "Asignaciones" },
   ];
 
   return (
@@ -1221,6 +1417,7 @@ function AdminView({ profile }) {
           {tab === "modulos" && <TabModulos cursos={cursos} modulos={modulos} tareas={tareas} reload={loadData} />}
           {tab === "tareas" && <TabTareas cursos={cursos} modulos={modulos} tareas={tareas} reload={loadData} />}
           {tab === "equipos" && <TabEquipos cursos={cursos} equipos={equipos} alumnos={alumnos} reload={loadData} />}
+          {tab === "asignaciones" && <TabAsignaciones cursos={cursos} equipos={equipos} modulos={modulos} docentes={docentes} reload={loadData} />}
         </>
       )}
     </main>

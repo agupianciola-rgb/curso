@@ -644,6 +644,7 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
   const [form, setForm] = useState({ titulo: "", descripcion: "", curso_id: cursos[0]?.id || "", modulo_id: "", fecha_limite: "" });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [filterModulo, setFilterModulo] = useState("todos");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => { if (cursos.length > 0 && !form.curso_id) setForm(f => ({ ...f, curso_id: cursos[0].id })); }, [cursos]);
@@ -663,12 +664,10 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
     else { setMsg({ type: "success", text: "Tarea creada" }); setForm(f => ({ ...f, titulo: "", descripcion: "", modulo_id: "", fecha_limite: "" })); reload(); }
     setLoading(false);
   }
-  async function editar(id, vals, tareaActual) {
+  async function editar(id, vals) {
     const { error } = await supabase.from("tareas").update({
-      titulo: vals.titulo,
-      descripcion: vals.descripcion || null,
-      modulo_id: vals.modulo_id || null,
-      fecha_limite: vals.fecha_limite || null,
+      titulo: vals.titulo, descripcion: vals.descripcion || null,
+      modulo_id: vals.modulo_id || null, fecha_limite: vals.fecha_limite || null,
     }).eq("id", id);
     if (!error) reload();
   }
@@ -680,8 +679,53 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
 
   if (cursos.length === 0) return <div className="empty"><div className="empty-icon">📝</div><div className="empty-title">Primero creá un curso</div></div>;
 
+  // Filtrar tareas según el módulo seleccionado
+  const tareasFiltradas = filterModulo === "todos"
+    ? tareas
+    : filterModulo === "sin-modulo"
+      ? tareas.filter(t => !t.modulo_id)
+      : tareas.filter(t => t.modulo_id === filterModulo);
+
+  // Agrupar por módulo cuando se muestra "todos"
+  const grupos = filterModulo === "todos"
+    ? [
+        ...modulos.map(mod => ({
+          key: mod.id,
+          label: mod.nombre,
+          tareas: tareas.filter(t => t.modulo_id === mod.id),
+        })),
+        {
+          key: "sin-modulo",
+          label: "Sin módulo",
+          tareas: tareas.filter(t => !t.modulo_id),
+        },
+      ].filter(g => g.tareas.length > 0)
+    : [{ key: "filtrado", label: null, tareas: tareasFiltradas }];
+
+  function renderTarea(t) {
+    const curso = cursos.find(c => c.id === t.curso_id);
+    const modulosDelCursoT = modulos.filter(m => m.curso_id === t.curso_id);
+    return (
+      <EditableRow key={t.id}
+        fields={[
+          { key: "titulo", label: "Título", value: t.titulo },
+          { key: "descripcion", label: "Consigna", value: t.descripcion, type: "textarea" },
+          { key: "modulo_id", label: "Módulo", value: t.modulo_id || "", type: "select", options: [{ value: "", label: "Sin módulo" }, ...modulosDelCursoT.map(m => ({ value: m.id, label: m.nombre }))] },
+          { key: "fecha_limite", label: "Fecha límite", value: t.fecha_limite ? new Date(t.fecha_limite).toISOString().slice(0, 16) : "", type: "datetime-local" },
+        ]}
+        onSave={vals => editar(t.id, vals)}
+        onDelete={() => eliminar(t.id)}
+        deleteConfirm="¿Eliminar esta tarea y sus entregas?"
+      >
+        <div className="item-row-title">{t.titulo}</div>
+        <div className="item-row-sub">{curso?.nombre}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
+      </EditableRow>
+    );
+  }
+
   return (
     <div className="grid-2" style={{ alignItems: "start" }}>
+      {/* Columna izquierda: formulario */}
       <div className="card">
         <div className="section-title" style={{ marginBottom: 20 }}>Nueva tarea</div>
         <Msg msg={msg} />
@@ -694,30 +738,40 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
           <button className="btn btn-primary" disabled={loading}>{loading ? <><Spinner /> Creando...</> : "Crear tarea"}</button>
         </form>
       </div>
+
+      {/* Columna derecha: listado con filtro */}
       <div>
-        <div className="section-title" style={{ marginBottom: 14 }}>Tareas existentes</div>
-        {tareas.length === 0 ? <div className="empty" style={{ padding: "24px 0" }}><div className="empty-sub">No hay tareas</div></div>
-          : tareas.map(t => {
-            const mod = modulos.find(m => m.id === t.modulo_id);
-            const curso = cursos.find(c => c.id === t.curso_id);
-            const modulosDelCursoT = modulos.filter(m => m.curso_id === t.curso_id);
-            return (
-              <EditableRow key={t.id}
-                fields={[
-                  { key: "titulo", label: "Título", value: t.titulo },
-                  { key: "descripcion", label: "Consigna", value: t.descripcion, type: "textarea" },
-                  { key: "modulo_id", label: "Módulo", value: t.modulo_id || "", type: "select", options: [{ value: "", label: "Sin módulo" }, ...modulosDelCursoT.map(m => ({ value: m.id, label: m.nombre }))] },
-                  { key: "fecha_limite", label: "Fecha límite", value: t.fecha_limite ? new Date(t.fecha_limite).toISOString().slice(0, 16) : "", type: "datetime-local" },
-                ]}
-                onSave={vals => editar(t.id, vals, t)}
-                onDelete={() => eliminar(t.id)}
-                deleteConfirm="¿Eliminar esta tarea y sus entregas?"
-              >
-                <div className="item-row-title">{t.titulo}</div>
-                <div className="item-row-sub">{curso?.nombre}{mod ? ` · ${mod.nombre}` : ""}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
-              </EditableRow>
-            );
-          })}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div className="section-title">Tareas existentes</div>
+          <select
+            className="form-select"
+            style={{ maxWidth: 200, fontSize: 13 }}
+            value={filterModulo}
+            onChange={e => setFilterModulo(e.target.value)}
+          >
+            <option value="todos">Todos los módulos</option>
+            {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            <option value="sin-modulo">Sin módulo</option>
+          </select>
+        </div>
+
+        {tareas.length === 0 ? (
+          <div className="empty" style={{ padding: "24px 0" }}><div className="empty-sub">No hay tareas</div></div>
+        ) : grupos.every(g => g.tareas.length === 0) ? (
+          <div className="empty" style={{ padding: "24px 0" }}><div className="empty-sub">No hay tareas en este módulo</div></div>
+        ) : (
+          grupos.map(grupo => (
+            <div key={grupo.key} style={{ marginBottom: 20 }}>
+              {grupo.label && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
+                  <span className="modulo-label">{grupo.label}</span>
+                  <span style={{ fontSize: 12, color: "var(--text3)" }}>{grupo.tareas.length} tarea(s)</span>
+                </div>
+              )}
+              {grupo.tareas.map(t => renderTarea(t))}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

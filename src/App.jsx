@@ -718,7 +718,9 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
         deleteConfirm="¿Eliminar esta tarea y sus entregas?"
       >
         <div className="item-row-title">{t.titulo}</div>
-        <div className="item-row-sub">{curso?.nombre}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
+        
+        <div className="item-row-sub">{t.descripcion}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
+      
       </EditableRow>
     );
   }

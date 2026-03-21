@@ -812,9 +812,16 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
   }
   async function agregarMiembro(equipoId, alumnoId) {
     if (!alumnoId) return;
+    // Verificar si el alumno ya pertenece a algún equipo
+    const yaEnUnEquipo = miembros.some(m => m.alumno_id === alumnoId);
+    if (yaEnUnEquipo) {
+      const equipoActual = equipos.find(eq => eq.id === miembros.find(m => m.alumno_id === alumnoId)?.equipo_id);
+      setMsg({ type: "error", text: `Este alumno ya pertenece al equipo "${equipoActual?.nombre || "otro equipo"}"` });
+      return;
+    }
     const { error } = await supabase.from("equipo_miembros").insert({ equipo_id: equipoId, alumno_id: alumnoId });
     if (error) setMsg({ type: "error", text: error.message });
-    else { setAddAlumno(a => ({ ...a, [equipoId]: "" })); loadMiembros(); }
+    else { setMsg(null); setAddAlumno(a => ({ ...a, [equipoId]: "" })); loadMiembros(); }
   }
   async function quitarMiembro(id) {
     await supabase.from("equipo_miembros").delete().eq("id", id); loadMiembros();
@@ -824,8 +831,10 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
 
   const getMiembrosDeEquipo = (equipoId) => miembros.filter(m => m.equipo_id === equipoId);
   const alumnosDisponibles = (equipoId) => {
-    const yaEnEquipo = getMiembrosDeEquipo(equipoId).map(m => m.alumno_id);
-    return alumnos.filter(a => !yaEnEquipo.includes(a.id));
+    // Excluir alumnos que ya están en cualquier equipo (no solo en este)
+    const yaEnCualquierEquipo = miembros.map(m => m.alumno_id);
+    const yaEnEsteEquipo = getMiembrosDeEquipo(equipoId).map(m => m.alumno_id);
+    return alumnos.filter(a => !yaEnCualquierEquipo.includes(a.id) || yaEnEsteEquipo.includes(a.id));
   };
 
   return (

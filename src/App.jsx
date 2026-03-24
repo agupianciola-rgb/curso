@@ -626,6 +626,39 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado, entregaAnterior
   );
 }
 
+// ── Modal Ejemplo ──────────────────────────────────────────
+function EjemploModal({ tarea, onClose }) {
+  const esImagen = tarea.tipo === "imagen";
+  const ytId = !esImagen && tarea.ejemplo_url ? extractYoutubeId(tarea.ejemplo_url) : null;
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">Ejemplo — {tarea.titulo}</div>
+            <div style={{ fontSize: 12, color: "var(--gold)", marginTop: 2 }}>★ Material de referencia</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-video">
+          {esImagen ? (
+            <img src={tarea.ejemplo_imagen_url} alt="Ejemplo" style={{ width: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 8, background: "var(--bg3)", display: "block" }} />
+          ) : ytId ? (
+            <div className="modal-iframe-wrap">
+              <iframe src={`https://www.youtube.com/embed/${ytId}?rel=0`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
+          ) : (
+            <div style={{ padding: 24, textAlign: "center", color: "var(--text3)" }}>URL de ejemplo no válida</div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <div style={{ fontSize: 13, color: "var(--text2)" }}>Este es un ejemplo de referencia para orientarte en tu entrega.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Editar entrega pendiente (alumno) ─────────────────────
 function EditarEntregaForm({ tarea, entrega, onGuardado, onCancelar }) {
   const esImagen = tarea.tipo === "imagen";
@@ -712,10 +745,11 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
   const vencida = isVencida(tarea.fecha_limite) && !entrega;
   const esImagen = tarea.tipo === "imagen";
   const esRehacer = entrega?.estado === "rehacer";
-  // Si el módulo está deshabilitado, no se puede subir ni rehacer
   const puedeCargar = moduloHabilitado;
+  const tieneEjemplo = esImagen ? !!tarea.ejemplo_imagen_url : !!tarea.ejemplo_url;
 
   const [editando, setEditando] = useState(false);
+  const [verEjemplo, setVerEjemplo] = useState(false);
 
   function thumbSrc() {
     if (!entrega) return null;
@@ -736,6 +770,11 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
           </div>
           {tarea.descripcion && <div className="tarea-desc">{tarea.descripcion}</div>}
           {tarea.fecha_limite && <div className="tarea-meta" style={{ color: vencida ? "var(--red)" : "var(--text3)" }}>⏰ {vencida ? "Venció" : "Vence"}: {formatDatetime(tarea.fecha_limite)}</div>}
+          {tieneEjemplo && (
+            <button onClick={() => setVerEjemplo(true)} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: "var(--gold)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              ★ Ver ejemplo
+            </button>
+          )}
         </div>
         <div style={{ flexShrink: 0 }}>
           {entrega ? <Badge estado={entrega.estado} /> : vencida ? <Badge estado="vencida" /> : <Badge estado="sinentrega" />}
@@ -780,11 +819,10 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
           <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} />
         ) : null}
       </div>
+      {verEjemplo && <EjemploModal tarea={tarea} onClose={() => setVerEjemplo(false)} />}
     </div>
   );
 }
-
-// ── Alumno View ────────────────────────────────────────────
 function AlumnoView({ profile }) {
   const [cursos, setCursos] = useState([]);
   const [modulos, setModulos] = useState([]);
@@ -1264,6 +1302,8 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
       titulo: vals.titulo, descripcion: vals.descripcion || null,
       modulo_id: moduloId, fecha_limite: vals.fecha_limite || null,
       tipo: vals.tipo || "video", orden: nuevoOrden,
+      ejemplo_url: vals.ejemplo_url || null,
+      ejemplo_imagen_url: vals.ejemplo_imagen_url || null,
     }).eq("id", id);
     if (!error) {
       await reordenar(cursoId, moduloId);
@@ -1314,6 +1354,10 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
           { key: "descripcion", label: "Consigna", value: t.descripcion, type: "textarea" },
           { key: "modulo_id", label: "Módulo", value: t.modulo_id || "", type: "select", options: [{ value: "", label: "Sin módulo" }, ...modulosDelCursoT.map(m => ({ value: m.id, label: m.nombre }))] },
           { key: "fecha_limite", label: "Fecha límite", value: t.fecha_limite ? new Date(t.fecha_limite).toISOString().slice(0, 16) : "", type: "datetime-local" },
+          ...(t.tipo === "imagen"
+            ? [{ key: "ejemplo_imagen_url", label: "Ejemplo — URL pública de imagen", value: t.ejemplo_imagen_url || "" }]
+            : [{ key: "ejemplo_url", label: "Ejemplo — Link de YouTube", value: t.ejemplo_url || "" }]
+          ),
         ]}
         onSave={vals => editar(t.id, vals, t)}
         onDelete={() => eliminar(t.id)}
@@ -1325,6 +1369,7 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
           <span className={`tipo-badge ${t.tipo === "imagen" ? "tipo-badge-imagen" : "tipo-badge-video"}`}>
             {t.tipo === "imagen" ? "🖼️ Imagen" : "▶ Video"}
           </span>
+          {(t.ejemplo_url || t.ejemplo_imagen_url) && <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(212,168,67,0.1)", color: "var(--gold)", border: "1px solid rgba(212,168,67,0.2)", padding: "1px 6px", borderRadius: 10 }}>★ Ejemplo</span>}
         </div>
         <div className="item-row-sub">{curso?.nombre}{t.fecha_limite ? ` · Vence ${formatDate(t.fecha_limite)}` : ""}</div>
       </EditableRow>

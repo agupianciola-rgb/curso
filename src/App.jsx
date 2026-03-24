@@ -5,7 +5,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const LOGO = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgwIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDQ4MCAxMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0ODAiIGhlaWdodD0iMTIwIiBmaWxsPSIjMGQwZTBmIiByeD0iMTIiLz4KPHJlY3QgeD0iMTgiIHk9IjE4IiB3aWR0aD0iODQiIGhlaWdodD0iODQiIHJ4PSIxNiIgZmlsbD0iIzFhM2EyYSIvPgo8cG9seWdvbiBwb2ludHM9IjYwLDMyIDMwLDUwIDkwLDUwIiBmaWxsPSIjM2VjZjhlIi8+CjxyZWN0IHg9IjQyIiB5PSI1MiIgd2lkdGg9IjM2IiBoZWlnaHQ9IjIyIiByeD0iMyIgZmlsbD0iIzNlY2Y4ZSIvPgo8bGluZSB4MT0iOTAiIHkxPSI0MSIgeDI9IjkwIiB5Mj0iNjIiIHN0cm9rZT0iIzNlY2Y4ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPGNpcmNsZSBjeD0iOTAiIGN5PSI2NCIgcj0iMyIgZmlsbD0iIzNlY2Y4ZSIvPgo8dGV4dCB4PSIxMTgiIHk9IjU1IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyOCIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iI2Y0ZjBlOCI+UE9SVEZPTElPPC90ZXh0Pgo8dGV4dCB4PSIxMTgiIHk9Ijg0IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyOCIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iIzNlY2Y4ZSI+TUVESUNPPC90ZXh0Pgo8dGV4dCB4PSIxMTkiIHk9IjEwNCIgZm9udC1mYW1pbHk9IkFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiM1YTVhNWEiIGxldHRlci1zcGFjaW5nPSIzIj5QTEFUQUZPUk1BIEFDQURFTUlDQTwvdGV4dD4KPC9zdmc+";
+const LOGO = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDIwIiBoZWlnaHQ9IjkwIiB2aWV3Qm94PSIwIDAgNDIwIDkwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iNDIwIiBoZWlnaHQ9IjkwIiBmaWxsPSJ0cmFuc3BhcmVudCIvPgo8cmVjdCB4PSI4IiB5PSI4IiB3aWR0aD0iNzQiIGhlaWdodD0iNzQiIHJ4PSIxNCIgZmlsbD0iIzFhM2EyYSIvPgo8cG9seWdvbiBwb2ludHM9IjQ1LDE4IDE5LDM1IDcxLDM1IiBmaWxsPSIjM2VjZjhlIi8+CjxyZWN0IHg9IjI4IiB5PSIzOCIgd2lkdGg9IjM0IiBoZWlnaHQ9IjIwIiByeD0iMyIgZmlsbD0iIzNlY2Y4ZSIvPgo8bGluZSB4MT0iNzEiIHkxPSIyNyIgeDI9IjcxIiB5Mj0iNDYiIHN0cm9rZT0iIzNlY2Y4ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPGNpcmNsZSBjeD0iNzEiIGN5PSI0OCIgcj0iMyIgZmlsbD0iIzNlY2Y4ZSIvPgo8dGV4dCB4PSI5NiIgeT0iNDIiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxzYW5zLXNlcmlmIiBmb250LXNpemU9IjI2IiBmb250LXdlaWdodD0iOTAwIiBmaWxsPSIjZjRmMGU4Ij5QT1JURk9MSU88L3RleHQ+Cjx0ZXh0IHg9Ijk2IiB5PSI3MCIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZpbGw9IiMzZWNmOGUiPk3DiURJQ088L3RleHQ+Cjwvc3ZnPg==";
+const LOGO_LOGIN = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDIwIiBoZWlnaHQ9IjkwIiB2aWV3Qm94PSIwIDAgNDIwIDkwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iNDIwIiBoZWlnaHQ9IjkwIiBmaWxsPSIjMTYxNzE4Ii8+CjxyZWN0IHg9IjgiIHk9IjgiIHdpZHRoPSI3NCIgaGVpZ2h0PSI3NCIgcng9IjE0IiBmaWxsPSIjMWEzYTJhIi8+Cjxwb2x5Z29uIHBvaW50cz0iNDUsMTggMTksMzUgNzEsMzUiIGZpbGw9IiMzZWNmOGUiLz4KPHJlY3QgeD0iMjgiIHk9IjM4IiB3aWR0aD0iMzQiIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSIjM2VjZjhlIi8+CjxsaW5lIHgxPSI3MSIgeTE9IjI3IiB4Mj0iNzEiIHkyPSI0NiIgc3Ryb2tlPSIjM2VjZjhlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8Y2lyY2xlIGN4PSI3MSIgY3k9IjQ4IiByPSIzIiBmaWxsPSIjM2VjZjhlIi8+Cjx0ZXh0IHg9Ijk2IiB5PSI0MiIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZpbGw9IiNmNGYwZTgiPlBPUlRGT0xJTzwvdGV4dD4KPHRleHQgeD0iOTYiIHk9IjcwIiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNiIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iIzNlY2Y4ZSI+TcOJRElDTzwvdGV4dD4KPC9zdmc+";
+const LOGO_FAVICON = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzFhM2EyYSIvPgo8cG9seWdvbiBwb2ludHM9IjE2LDUgNCwxMiAyOCwxMiIgZmlsbD0iIzNlY2Y4ZSIvPgo8cmVjdCB4PSI5IiB5PSIxMyIgd2lkdGg9IjE0IiBoZWlnaHQ9IjkiIHJ4PSIyIiBmaWxsPSIjM2VjZjhlIi8+CjxsaW5lIHgxPSIyOCIgeTE9IjgiIHgyPSIyOCIgeTI9IjE3IiBzdHJva2U9IiMzZWNmOGUiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPGNpcmNsZSBjeD0iMjgiIGN5PSIxOCIgcj0iMS41IiBmaWxsPSIjM2VjZjhlIi8+Cjwvc3ZnPg==";
 
 
 // ── Utils ──────────────────────────────────────────────────
@@ -224,6 +226,10 @@ function StyleInjector() {
     const el = document.createElement("style");
     el.textContent = CSS;
     document.head.appendChild(el);
+    // Favicon dinámico
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+    link.href = LOGO_FAVICON;
     return () => document.head.removeChild(el);
   }, []);
   return null;
@@ -267,7 +273,7 @@ function AuthPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <img src={LOGO} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block" }} />
+        <img src={LOGO_LOGIN} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block", borderRadius: 8 }} />
         <div className="auth-sub">Plataforma de entregas y evaluaciones</div>
 
         {vista === "login" && (
@@ -346,7 +352,7 @@ function ResetPasswordPage({ onDone }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <img src={LOGO} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block" }} />
+        <img src={LOGO_LOGIN} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block", borderRadius: 8 }} />
         {ok ? (
           <div style={{ textAlign: "center", paddingTop: 16 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>

@@ -410,7 +410,12 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
               <div className="modal-title">{entrega.titulo}</div>
               {es2doIntento && <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(96,165,250,0.15)", color: "var(--blue)", border: "1px solid rgba(96,165,250,0.3)", padding: "2px 8px", borderRadius: 20 }}>2do intento</span>}
             </div>
-            {entrega.tareas && <div style={{ fontSize: 12, color: "var(--purple)", marginTop: 2 }}>📋 {entrega.tareas?.nombre || entrega.tareas?.titulo}</div>}
+            {entrega.tareas && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: "var(--purple)" }}>📋 {entrega.tareas?.titulo}</div>
+                {entrega.tareas?.descripcion && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 3, lineHeight: 1.5 }}>{entrega.tareas.descripcion}</div>}
+              </div>
+            )}
             {entrega.profiles && <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2 }}>por {entrega.profiles?.nombre}</div>}
             {entrega.equipo && <div style={{ marginTop: 4 }}><span className="equipo-chip">👥 {entrega.equipo}</span></div>}
           </div>
@@ -1402,11 +1407,14 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
           const mod = tarea?.modulo_id ? modulos.find(m => m.id === tarea.modulo_id) : null;
           return (
             <div key={tareaId || "sin-tarea"} className="card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
-                {mod && <span className="modulo-label">{mod.nombre}</span>}
-                {tarea?.orden && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)" }}>#{tarea.orden}</span>}
-                <span style={{ fontWeight: 500 }}>{tarea?.titulo || "Sin tarea"}</span>
-                <span style={{ fontSize: 12, color: "var(--text3)", marginLeft: "auto" }}>{entregasDeTarea.length} entrega(s)</span>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: tarea?.descripcion ? 4 : 0 }}>
+                  {mod && <span className="modulo-label">{mod.nombre}</span>}
+                  {tarea?.orden && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)" }}>#{tarea.orden}</span>}
+                  <span style={{ fontWeight: 500 }}>{tarea?.titulo || "Sin tarea"}</span>
+                  <span style={{ fontSize: 12, color: "var(--text3)", marginLeft: "auto" }}>{entregasDeTarea.length} entrega(s)</span>
+                </div>
+                {tarea?.descripcion && <div style={{ fontSize: 13, color: "var(--text2)", marginLeft: 2, lineHeight: 1.4 }}>{tarea.descripcion}</div>}
               </div>
               {entregasDeTarea.map(entrega => {
                 const equipo = equipos.find(eq => eq.id === entrega.equipo_id);
@@ -1461,7 +1469,7 @@ function DocenteView({ profile }) {
       cursoId ? supabase.from("tareas").select("*").eq("curso_id", cursoId).order("orden", { ascending: true }) : Promise.resolve({ data: [] }),
       cursoId ? supabase.from("equipos").select("*").eq("curso_id", cursoId).order("nombre") : Promise.resolve({ data: [] }),
       supabase.from("entregas")
-        .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo)")
+        .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo, descripcion)")
         .eq("docente_asignado_id", profile.id)
         .order("created_at", { ascending: false }),
     ]);

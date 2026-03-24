@@ -236,6 +236,8 @@ function AuthPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [vista, setVista] = useState("login"); // "login" | "recuperar" | "enviado"
+  const [emailRecup, setEmailRecup] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function handleLogin(e) {
@@ -245,20 +247,118 @@ function AuthPage() {
     setLoading(false);
   }
 
+  async function handleRecuperar(e) {
+    e.preventDefault(); setLoading(true); setError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(emailRecup, {
+      redirectTo: window.location.origin,
+    });
+    if (error) setError(error.message);
+    else setVista("enviado");
+    setLoading(false);
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-card">
         <img src={LOGO} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block" }} />
         <div className="auth-sub">Plataforma de entregas y evaluaciones</div>
-        {error && <div className="auth-error" style={{ marginTop: 16 }}>{error}</div>}
-        <form onSubmit={handleLogin} style={{ marginTop: 24 }}>
-          <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} required /></div>
-          <div className="form-group"><label className="form-label">Contraseña</label><input className="form-input" type="password" placeholder="••••••••" value={form.password} onChange={e => set("password", e.target.value)} required /></div>
-          <button className="btn btn-primary btn-full" style={{ marginTop: 8 }} disabled={loading}>{loading ? <><Spinner /> Ingresando...</> : "Ingresar"}</button>
-        </form>
-        <div style={{ marginTop: 20, fontSize: 12, color: "var(--text3)", textAlign: "center" }}>
-          Para obtener acceso contactá al administrador
-        </div>
+
+        {vista === "login" && (
+          <>
+            {error && <div className="auth-error" style={{ marginTop: 16 }}>{error}</div>}
+            <form onSubmit={handleLogin} style={{ marginTop: 24 }}>
+              <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} required /></div>
+              <div className="form-group"><label className="form-label">Contraseña</label><input className="form-input" type="password" placeholder="••••••••" value={form.password} onChange={e => set("password", e.target.value)} required /></div>
+              <button className="btn btn-primary btn-full" style={{ marginTop: 8 }} disabled={loading}>{loading ? <><Spinner /> Ingresando...</> : "Ingresar"}</button>
+            </form>
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <button onClick={() => { setVista("recuperar"); setError(""); }} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--text3)", textAlign: "center" }}>
+              Para obtener acceso contactá al administrador
+            </div>
+          </>
+        )}
+
+        {vista === "recuperar" && (
+          <>
+            <div style={{ marginTop: 20, marginBottom: 8, fontSize: 14, color: "var(--text2)" }}>
+              Ingresá tu email y te mandamos un link para restablecer tu contraseña.
+            </div>
+            {error && <div className="auth-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <form onSubmit={handleRecuperar}>
+              <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" placeholder="tu@email.com" value={emailRecup} onChange={e => setEmailRecup(e.target.value)} required /></div>
+              <button className="btn btn-primary btn-full" disabled={loading}>{loading ? <><Spinner /> Enviando...</> : "Enviar link"}</button>
+            </form>
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <button onClick={() => { setVista("login"); setError(""); }} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+                ← Volver al login
+              </button>
+            </div>
+          </>
+        )}
+
+        {vista === "enviado" && (
+          <div style={{ marginTop: 24, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>📬</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>Revisá tu email</div>
+            <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20, lineHeight: 1.6 }}>
+              Te enviamos un link a <strong>{emailRecup}</strong> para restablecer tu contraseña. Revisá también la carpeta de spam.
+            </div>
+            <button onClick={() => { setVista("login"); setEmailRecup(""); }} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+              ← Volver al login
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Reset Password Page ────────────────────────────────────
+function ResetPasswordPage({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault(); setError("");
+    if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres");
+    if (password !== confirm) return setError("Las contraseñas no coinciden");
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) setError(error.message);
+    else setOk(true);
+    setLoading(false);
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <img src={LOGO} alt="Logo" style={{ width: "100%", maxWidth: 280, marginBottom: 20, display: "block" }} />
+        {ok ? (
+          <div style={{ textAlign: "center", paddingTop: 16 }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>Contraseña actualizada</div>
+            <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20 }}>Ya podés ingresar con tu nueva contraseña.</div>
+            <button className="btn btn-primary btn-full" onClick={onDone}>Ir al login</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4, marginTop: 8 }}>Nueva contraseña</div>
+            <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20 }}>Elegí una nueva contraseña para tu cuenta.</div>
+            {error && <div className="auth-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <form onSubmit={handleSubmit}>
+              <div className="form-group"><label className="form-label">Nueva contraseña</label><input className="form-input" type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+              <div className="form-group"><label className="form-label">Confirmar contraseña</label><input className="form-input" type="password" placeholder="Repetí la contraseña" value={confirm} onChange={e => setConfirm(e.target.value)} required /></div>
+              <button className="btn btn-primary btn-full" disabled={loading}>{loading ? <><Spinner /> Guardando...</> : "Guardar contraseña"}</button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1605,11 +1705,15 @@ function Navbar({ profile }) {
 export default function App() {
   const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(null);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setSession(session); if (!session) setProfile(null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      if (!session) setProfile(null);
+      // Detectar cuando el usuario llega desde el link de recuperación
+      if (event === "PASSWORD_RECOVERY") setIsRecovery(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -1624,9 +1728,14 @@ export default function App() {
     <AuthCtx.Provider value={{ session, profile }}>
       <StyleInjector />
       <div className="app">
-        {!session ? <AuthPage /> : !profile
-          ? <div className="loading-center" style={{ minHeight: "100vh" }}><Spinner /> Cargando perfil...</div>
-          : <><Navbar profile={profile} />{profile.rol === "alumno" ? <AlumnoView profile={profile} /> : profile.rol === "admin" ? <AdminView profile={profile} /> : <DocenteView profile={profile} />}</>}
+        {isRecovery && session
+          ? <ResetPasswordPage onDone={() => { setIsRecovery(false); supabase.auth.signOut(); }} />
+          : !session
+            ? <AuthPage />
+            : !profile
+              ? <div className="loading-center" style={{ minHeight: "100vh" }}><Spinner /> Cargando perfil...</div>
+              : <><Navbar profile={profile} />{profile.rol === "alumno" ? <AlumnoView profile={profile} /> : profile.rol === "admin" ? <AdminView profile={profile} /> : <DocenteView profile={profile} />}</>
+        }
       </div>
     </AuthCtx.Provider>
   );

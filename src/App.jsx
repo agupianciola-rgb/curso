@@ -479,6 +479,8 @@ function AlumnoView({ profile }) {
   const [miEquipo, setMiEquipo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroModulo, setFiltroModulo] = useState("todos");
 
   useEffect(() => { loadData(); }, []);
 
@@ -501,61 +503,117 @@ function AlumnoView({ profile }) {
 
   const getEntrega = (tareaId) => entregas.find(e => e.tarea_id === tareaId) || null;
 
-  // Build: cursos → modulos → tareas
-  const estructura = cursos.map(curso => {
-    const modulosDeCurso = modulos.filter(m => m.curso_id === curso.id);
-    const tareasSinModulo = tareas.filter(t => t.curso_id === curso.id && !t.modulo_id);
-    return { curso, modulosDeCurso, tareasSinModulo };
-  }).filter(g => g.modulosDeCurso.length > 0 || g.tareasSinModulo.length > 0);
-
-  const equipoId = miEquipo?.id || null;
-
   const stats = {
     total: tareas.length,
     aprobadas: entregas.filter(e => e.estado === "aprobado").length,
     pendientes: entregas.filter(e => e.estado === "pendiente").length,
+    desaprobadas: entregas.filter(e => e.estado === "desaprobado").length,
   };
+
+  // Filtrar tareas según estado y módulo seleccionados
+  function tareaVisible(tarea) {
+    const entrega = getEntrega(tarea.id);
+    if (filtroModulo !== "todos" && tarea.modulo_id !== filtroModulo) return false;
+    if (filtroEstado === "todas") return true;
+    if (filtroEstado === "aprobado") return entrega?.estado === "aprobado";
+    if (filtroEstado === "pendiente") return entrega?.estado === "pendiente";
+    if (filtroEstado === "desaprobado") return entrega?.estado === "desaprobado";
+    if (filtroEstado === "sinentrega") return !entrega;
+    return true;
+  }
+
+  // Build: cursos → modulos → tareas (respetando filtros)
+  const estructura = cursos.map(curso => {
+    const modulosDeCurso = modulos.filter(m => m.curso_id === curso.id);
+    const tareasSinModulo = tareas.filter(t => t.curso_id === curso.id && !t.modulo_id && tareaVisible(t));
+    return {
+      curso,
+      modulosDeCurso: modulosDeCurso.map(mod => ({
+        mod,
+        tareasFiltradas: tareas.filter(t => t.modulo_id === mod.id && tareaVisible(t))
+      })).filter(m => m.tareasFiltradas.length > 0),
+      tareasSinModulo,
+    };
+  }).filter(g => g.modulosDeCurso.length > 0 || g.tareasSinModulo.length > 0);
+
+  const equipoId = miEquipo?.id || null;
+
+  function StatCard({ label, value, color, estado }) {
+    const active = filtroEstado === estado;
+    return (
+      <div
+        className="stat-card"
+        onClick={() => setFiltroEstado(active ? "todas" : estado)}
+        style={{ cursor: "pointer", transition: "all 0.15s", outline: active ? `2px solid ${color}` : "2px solid transparent", outlineOffset: 2 }}
+      >
+        <div className="stat-num" style={{ color }}>{value}</div>
+        <div className="stat-label">{label}</div>
+        {active && <div style={{ fontSize: 11, color, marginTop: 4 }}>● filtrando</div>}
+      </div>
+    );
+  }
 
   return (
     <main className="main">
       <div className="page-title">Mis tareas</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
         <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {profile.nombre}</span>
         {miEquipo && <span className="equipo-chip">👥 {miEquipo.nombre}</span>}
       </div>
 
-      <div className="grid-3" style={{ marginBottom: 32 }}>
-        <div className="stat-card"><div className="stat-num">{stats.total}</div><div className="stat-label">Tareas asignadas</div></div>
-        <div className="stat-card"><div className="stat-num" style={{ color: "var(--green)" }}>{stats.aprobadas}</div><div className="stat-label">Aprobadas</div></div>
-        <div className="stat-card"><div className="stat-num" style={{ color: "var(--amber)" }}>{stats.pendientes}</div><div className="stat-label">En revisión</div></div>
+      {/* Stats clickeables */}
+      <div className="grid-4" style={{ marginBottom: 20 }}>
+        <StatCard label="Tareas totales" value={stats.total} color="var(--accent)" estado="todas" />
+        <StatCard label="Aprobadas" value={stats.aprobadas} color="var(--green)" estado="aprobado" />
+        <StatCard label="En revisión" value={stats.pendientes} color="var(--amber)" estado="pendiente" />
+        <StatCard label="Desaprobadas" value={stats.desaprobadas} color="var(--red)" estado="desaprobado" />
+      </div>
+
+      {/* Filtro por módulo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+        <select
+          className="form-select"
+          style={{ maxWidth: 260, fontSize: 13 }}
+          value={filtroModulo}
+          onChange={e => setFiltroModulo(e.target.value)}
+        >
+          <option value="todos">Todos los módulos</option>
+          {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+        {(filtroEstado !== "todas" || filtroModulo !== "todos") && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => { setFiltroEstado("todas"); setFiltroModulo("todos"); }}
+          >
+            ✕ Limpiar filtros
+          </button>
+        )}
       </div>
 
       {loading ? <div className="loading-center"><Spinner /> Cargando...</div>
         : estructura.length === 0 ? (
-          <div className="empty"><div className="empty-icon">📋</div><div className="empty-title">No hay tareas todavía</div><div className="empty-sub">El docente aún no asignó tareas</div></div>
+          <div className="empty">
+            <div className="empty-icon">📋</div>
+            <div className="empty-title">{filtroEstado !== "todas" || filtroModulo !== "todos" ? "Sin tareas con ese filtro" : "No hay tareas todavía"}</div>
+            <div className="empty-sub">{filtroEstado !== "todas" || filtroModulo !== "todos" ? "Probá cambiando los filtros" : "El docente aún no asignó tareas"}</div>
+          </div>
         ) : estructura.map(({ curso, modulosDeCurso, tareasSinModulo }) => (
           <div key={curso.id} style={{ marginBottom: 40 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>{curso.nombre}</div>
 
-            {/* Tareas organizadas por módulo */}
-            {modulosDeCurso.map(mod => {
-              const tareasDelMod = tareas.filter(t => t.modulo_id === mod.id);
-              if (tareasDelMod.length === 0) return null;
-              return (
-                <div key={mod.id} className="modulo-block">
-                  <div className="modulo-header">
-                    <span className="modulo-label">Módulo</span>
-                    <span className="modulo-name">{mod.nombre}</span>
-                    {mod.descripcion && <span style={{ fontSize: 13, color: "var(--text2)" }}>— {mod.descripcion}</span>}
-                  </div>
-                  {tareasDelMod.map(tarea => (
-                    <TareaCardAlumno key={tarea.id} tarea={tarea} entrega={getEntrega(tarea.id)} alumnoId={profile.id} equipoId={equipoId} onGuardado={loadData} onVerVideo={setSelected} />
-                  ))}
+            {modulosDeCurso.map(({ mod, tareasFiltradas }) => (
+              <div key={mod.id} className="modulo-block">
+                <div className="modulo-header">
+                  <span className="modulo-label">Módulo</span>
+                  <span className="modulo-name">{mod.nombre}</span>
+                  {mod.descripcion && <span style={{ fontSize: 13, color: "var(--text2)" }}>— {mod.descripcion}</span>}
                 </div>
-              );
-            })}
+                {tareasFiltradas.map(tarea => (
+                  <TareaCardAlumno key={tarea.id} tarea={tarea} entrega={getEntrega(tarea.id)} alumnoId={profile.id} equipoId={equipoId} onGuardado={loadData} onVerVideo={setSelected} />
+                ))}
+              </div>
+            ))}
 
-            {/* Tareas sin módulo */}
             {tareasSinModulo.length > 0 && (
               <div className="modulo-block">
                 {modulosDeCurso.length > 0 && (
@@ -570,6 +628,11 @@ function AlumnoView({ profile }) {
             )}
           </div>
         ))}
+
+      {selected && <VideoModal entrega={selected} profile={profile} onClose={() => setSelected(null)} onEvaluar={async () => {}} />}
+    </main>
+  );
+}
 
       {selected && <VideoModal entrega={selected} profile={profile} onClose={() => setSelected(null)} onEvaluar={async () => {}} />}
     </main>

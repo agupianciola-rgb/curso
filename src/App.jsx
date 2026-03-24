@@ -226,6 +226,8 @@ function StyleInjector() {
     const el = document.createElement("style");
     el.textContent = CSS;
     document.head.appendChild(el);
+    // Título de la pestaña
+    document.title = "Portfolio Médico";
     // Favicon dinámico
     let link = document.querySelector("link[rel~='icon']");
     if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }

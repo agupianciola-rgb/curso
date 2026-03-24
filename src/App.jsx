@@ -218,7 +218,53 @@ const CSS = `
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   @keyframes slideUp { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
   @keyframes spin { to{transform:rotate(360deg)} }
-  @media(max-width:768px) { .nav{padding:0 16px} .main{padding:24px 16px} .grid-2,.grid-3,.grid-4{grid-template-columns:1fr} }
+  @media(max-width:768px) {
+    .nav { padding:0 12px; height:52px; }
+    .nav-user { display:none; }
+    .nav-dots { display:none; }
+    .main { padding:20px 14px; }
+    .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
+    .page-title { font-size:22px; }
+    .page-sub { font-size:13px; margin-bottom:20px; }
+    .stat-card { padding:14px 16px; }
+    .stat-num { font-size:26px; }
+    .tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; padding-bottom:1px; }
+    .tab-btn { white-space:nowrap; padding:8px 12px; font-size:13px; }
+    .card { padding:16px; }
+    .modal { margin:0; border-radius:var(--radius) var(--radius) 0 0; }
+    .modal-overlay { padding:0; align-items:flex-end; }
+    .modal-header { padding:14px 16px; }
+    .modal-video { padding:10px 16px; }
+    .modal-actions { padding:12px 16px 20px; }
+    .modal-iframe-wrap { padding-top:56%; }
+    .entrega-row { padding:10px 12px; }
+    .entrega-row-thumb { width:52px; height:30px; }
+    .tarea-card { padding:14px; }
+    .tarea-titulo { font-size:14px; }
+    .auth-card { padding:24px 18px; border-radius:var(--radius); border-left:none; border-right:none; max-width:100%; }
+    .auth-page { padding:0; align-items:flex-start; }
+    .matrix-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .matrix-table { min-width:400px; }
+    .section-title { font-size:15px; }
+    .modulo-block { margin-bottom:20px; }
+    .subir-form { padding:12px; }
+    .upload-area { padding:16px; }
+    .btn { padding:8px 14px; font-size:13px; }
+    .btn-sm { padding:5px 10px; font-size:12px; }
+    .form-input,.form-select,.form-textarea { font-size:16px; }
+  }
+  @media(max-width:480px) {
+    .nav { height:48px; }
+    .main { padding:16px 12px; }
+    .page-title { font-size:20px; }
+    .stat-num { font-size:22px; }
+    .stat-card { padding:12px 14px; }
+    .tarea-header { flex-direction:column; align-items:flex-start; gap:8px; }
+    .tipo-badge { font-size:10px; }
+    .modal-actions-row { flex-direction:column; }
+    .modal-actions-row .btn { width:100%; justify-content:center; }
+    .nav-role { display:none; }
+  }
 `;
 
 function StyleInjector() {

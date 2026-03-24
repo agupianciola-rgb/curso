@@ -116,6 +116,7 @@ const CSS = `
   .badge-desaprobado { background:var(--red-bg); color:var(--red); border:1px solid rgba(248,113,113,0.2); }
   .badge-sinentrega { background:var(--bg3); color:var(--text3); border:1px solid var(--border2); }
   .badge-vencida { background:var(--red-bg); color:var(--red); border:1px solid rgba(248,113,113,0.2); }
+  .badge-rehacer { background:rgba(96,165,250,0.1); color:var(--blue); border:1px solid rgba(96,165,250,0.25); }
   .stat-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px 24px; }
   .stat-num { font-size:34px; font-weight:300; color:var(--accent); }
   .stat-label { font-size:13px; color:var(--text2); margin-top:2px; }
@@ -222,7 +223,7 @@ function StyleInjector() {
 }
 function Spinner() { return <span className="spinner">⟳</span>; }
 function Badge({ estado }) {
-  const map = { pendiente: "Pendiente", aprobado: "Aprobado", desaprobado: "Desaprobado", sinentrega: "Sin entrega", vencida: "Vencida" };
+  const map = { pendiente: "Pendiente", aprobado: "Aprobado", desaprobado: "Desaprobado", sinentrega: "Sin entrega", vencida: "Vencida", rehacer: "Rehacer" };
   return <span className={`badge badge-${estado}`}>● {map[estado] || estado}</span>;
 }
 function Msg({ msg }) {
@@ -267,20 +268,33 @@ function AuthPage() {
 function VideoModal({ entrega, profile, onClose, onEvaluar }) {
   const [comentario, setComentario] = useState(entrega.comentario_docente || "");
   const [loading, setLoading] = useState(false);
+  const [entregaAnterior, setEntregaAnterior] = useState(null);
   const canEvaluar = profile?.rol === "docente" && entrega.estado === "pendiente";
   const esImagen = !!entrega.imagen_url;
+  const es2doIntento = (entrega.intento || 1) === 2;
+
+  useEffect(() => {
+    if (es2doIntento && entrega.entrega_anterior_id) {
+      supabase.from("entregas").select("*").eq("id", entrega.entrega_anterior_id).single()
+        .then(({ data }) => setEntregaAnterior(data));
+    }
+  }, [entrega.id]);
 
   async function evaluar(estado) {
     setLoading(true);
     await onEvaluar(entrega.id, estado, comentario);
     setLoading(false); onClose();
   }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
           <div>
-            <div className="modal-title">{entrega.titulo}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="modal-title">{entrega.titulo}</div>
+              {es2doIntento && <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(96,165,250,0.15)", color: "var(--blue)", border: "1px solid rgba(96,165,250,0.3)", padding: "2px 8px", borderRadius: 20 }}>2do intento</span>}
+            </div>
             {entrega.tareas && <div style={{ fontSize: 12, color: "var(--purple)", marginTop: 2 }}>📋 {entrega.tareas?.nombre || entrega.tareas?.titulo}</div>}
             {entrega.profiles && <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2 }}>por {entrega.profiles?.nombre}</div>}
             {entrega.equipo && <div style={{ marginTop: 4 }}><span className="equipo-chip">👥 {entrega.equipo}</span></div>}
@@ -289,13 +303,34 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
         </div>
         <div className="modal-video">
           {esImagen ? (
-            <img src={entrega.imagen_url} alt={entrega.titulo} style={{ width: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 8, background: "var(--bg3)", display: "block" }} />
+            <img src={entrega.imagen_url} alt={entrega.titulo} style={{ width: "100%", maxHeight: 380, objectFit: "contain", borderRadius: 8, background: "var(--bg3)", display: "block" }} />
           ) : (
             <div className="modal-iframe-wrap">
               <iframe src={`https://www.youtube.com/embed/${entrega.youtube_id}?autoplay=1&rel=0`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
             </div>
           )}
         </div>
+
+        {/* Entrega anterior (solo para docente en 2do intento) */}
+        {es2doIntento && entregaAnterior && profile?.rol === "docente" && (
+          <div style={{ margin: "0 24px 4px", background: "var(--bg3)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "12px 14px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--red)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Primera entrega (desaprobada)</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {entregaAnterior.imagen_url ? (
+                <img src={entregaAnterior.imagen_url} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} alt="" />
+              ) : entregaAnterior.youtube_id ? (
+                <img src={`https://img.youtube.com/vi/${entregaAnterior.youtube_id}/mqdefault.jpg`} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} alt="" />
+              ) : null}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: "var(--text2)" }}>Subida el {formatDate(entregaAnterior.created_at)}</div>
+                {entregaAnterior.comentario_docente && (
+                  <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>💬 "{entregaAnterior.comentario_docente}"</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="modal-actions">
           {entrega.descripcion && <p style={{ fontSize: 13, color: "var(--text2)" }}>{entrega.descripcion}</p>}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -311,7 +346,9 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
               </div>
               <div className="modal-actions-row">
                 <button className="btn btn-success" onClick={() => evaluar("aprobado")} disabled={loading}>{loading ? <Spinner /> : "✓"} Aprobar</button>
-                <button className="btn btn-danger" onClick={() => evaluar("desaprobado")} disabled={loading}>{loading ? <Spinner /> : "✕"} Desaprobar</button>
+                <button className="btn btn-danger" onClick={() => evaluar("desaprobado")} disabled={loading}>
+                  {loading ? <Spinner /> : "✕"} {es2doIntento ? "Desaprobar (definitivo)" : "Desaprobar"}
+                </button>
               </div>
             </>
           )}
@@ -322,7 +359,7 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
 }
 
 // ── Subir entrega (video o imagen según tipo de tarea) ─────
-function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
+function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado, entregaAnterior }) {
   const [url, setUrl] = useState("");
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -332,6 +369,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
   const [msg, setMsg] = useState(null);
   const [abierto, setAbierto] = useState(false);
   const esImagen = tarea.tipo === "imagen";
+  const esRehacer = !!entregaAnterior;
 
   function handleArchivo(e) {
     const file = e.target.files[0];
@@ -343,10 +381,10 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
 
   async function handleSubmit(e) {
     e.preventDefault(); setMsg(null); setLoading(true);
-
-    // Resolver módulo de la tarea para buscar asignación
     const moduloId = tarea.modulo_id || null;
     const docenteId = await resolveDocente(tarea.curso_id, equipoId || null, moduloId);
+    const intento = esRehacer ? 2 : 1;
+    const entrega_anterior_id = esRehacer ? entregaAnterior.id : null;
 
     if (esImagen) {
       if (!archivo) { setMsg({ type: "error", text: "Seleccioná una imagen" }); setLoading(false); return; }
@@ -359,7 +397,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
         alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
         equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
         imagen_url: urlData.publicUrl, youtube_url: null, youtube_id: null,
-        docente_asignado_id: docenteId,
+        docente_asignado_id: docenteId, intento, entrega_anterior_id,
       });
       if (error) setMsg({ type: "error", text: error.message });
       else { setAbierto(false); setArchivo(null); setPreview(null); setTitulo(""); setDescripcion(""); onGuardado(); }
@@ -370,7 +408,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
         alumno_id: alumnoId, curso_id: tarea.curso_id, tarea_id: tarea.id,
         equipo_id: equipoId || null, titulo: titulo || tarea.titulo, descripcion,
         youtube_url: url, youtube_id: ytId, imagen_url: null,
-        docente_asignado_id: docenteId,
+        docente_asignado_id: docenteId, intento, entrega_anterior_id,
       });
       if (error) setMsg({ type: "error", text: error.message });
       else { setAbierto(false); setUrl(""); setTitulo(""); setDescripcion(""); onGuardado(); }
@@ -379,8 +417,9 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
   }
 
   if (!abierto) return (
-    <button className="btn btn-primary btn-sm" onClick={() => setAbierto(true)}>
-      + Subir {esImagen ? "imagen" : "video"}
+    <button className="btn btn-primary btn-sm" onClick={() => setAbierto(true)}
+      style={esRehacer ? { background: "rgba(96,165,250,0.15)", color: "var(--blue)", border: "1px solid rgba(96,165,250,0.3)" } : {}}>
+      {esRehacer ? "↩ Rehacer entrega" : `+ Subir ${esImagen ? "imagen" : "video"}`}
     </button>
   );
 
@@ -425,6 +464,7 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado }) {
 function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVerVideo }) {
   const vencida = isVencida(tarea.fecha_limite) && !entrega;
   const esImagen = tarea.tipo === "imagen";
+  const esRehacer = entrega?.estado === "rehacer";
 
   function thumbSrc() {
     if (!entrega) return null;
@@ -451,7 +491,7 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
         </div>
       </div>
       <div className="tarea-body">
-        {entrega ? (
+        {entrega && !esRehacer ? (
           <>
             <div className="tarea-entrega-preview" onClick={() => onVerVideo(entrega)}>
               <img src={thumbSrc()} alt="" style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
@@ -462,6 +502,15 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
             </div>
             {entrega.comentario_docente && <div className="modal-comment">💬 {entrega.comentario_docente}</div>}
           </>
+        ) : esRehacer ? (
+          <div>
+            <div style={{ marginBottom: 10, padding: "10px 12px", background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--blue)", marginBottom: 4 }}>Entrega desaprobada — podés subir una nueva versión</div>
+              {entrega.comentario_docente && <div style={{ fontSize: 12, color: "var(--text2)" }}>💬 "{entrega.comentario_docente}"</div>}
+              <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>Entrega anterior del {formatDate(entrega.created_at)} · <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => onVerVideo(entrega)}>ver</span></div>
+            </div>
+            <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} entregaAnterior={entrega} />
+          </div>
         ) : (
           <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} />
         )}
@@ -501,12 +550,21 @@ function AlumnoView({ profile }) {
     setLoading(false);
   }
 
-  const getEntrega = (tareaId) => entregas.find(e => e.tarea_id === tareaId) || null;
+  // Devuelve la entrega "activa" para mostrar en la card:
+  // Si hay una 2da entrega (intento=2), la muestra. Sino la 1ra.
+  const getEntrega = (tareaId) => {
+    const todas = entregas.filter(e => e.tarea_id === tareaId);
+    if (todas.length === 0) return null;
+    const segunda = todas.find(e => e.intento === 2);
+    if (segunda) return segunda;
+    return todas[0];
+  };
 
   const stats = {
     sinentrega: tareas.filter(t => !getEntrega(t.id)).length,
     aprobadas: entregas.filter(e => e.estado === "aprobado").length,
     pendientes: entregas.filter(e => e.estado === "pendiente").length,
+    rehacer: entregas.filter(e => e.estado === "rehacer").length,
     desaprobadas: entregas.filter(e => e.estado === "desaprobado").length,
   };
 
@@ -561,11 +619,12 @@ function AlumnoView({ profile }) {
         {miEquipo && <span className="equipo-chip">👥 {miEquipo.nombre}</span>}
       </div>
 
-      {/* Stats clickeables */}
-      <div className="grid-4" style={{ marginBottom: 20 }}>
+      {/* Stats clickeables — orden: Sin entregar / En Revisión / Aprobadas / Rehacer / Desaprobadas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Sin entregar" value={stats.sinentrega} color="var(--text2)" estado="sinentrega" />
-        <StatCard label="Aprobadas" value={stats.aprobadas} color="var(--green)" estado="aprobado" />
         <StatCard label="En revisión" value={stats.pendientes} color="var(--amber)" estado="pendiente" />
+        <StatCard label="Aprobadas" value={stats.aprobadas} color="var(--green)" estado="aprobado" />
+        <StatCard label="Rehacer" value={stats.rehacer} color="var(--blue)" estado="rehacer" />
         <StatCard label="Desaprobadas" value={stats.desaprobadas} color="var(--red)" estado="desaprobado" />
       </div>
 
@@ -1133,8 +1192,20 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
   const [filterEquipo, setFilterEquipo] = useState("todos");
   const [selected, setSelected] = useState(null);
 
-  async function handleEvaluar(id, estado, comentario) {
-    await supabase.from("entregas").update({ estado, comentario_docente: comentario || null, evaluado_por: profile.id, evaluado_at: new Date().toISOString() }).eq("id", id);
+  async function handleEvaluar(id, estadoSolicitado, comentario) {
+    // Buscar la entrega para saber si es 1er o 2do intento
+    const entrega = entregas.find(e => e.id === id);
+    let estadoFinal = estadoSolicitado;
+    // Si el docente desaprueba y es el 1er intento → rehacer
+    if (estadoSolicitado === "desaprobado" && (entrega?.intento || 1) === 1) {
+      estadoFinal = "rehacer";
+    }
+    await supabase.from("entregas").update({
+      estado: estadoFinal,
+      comentario_docente: comentario || null,
+      evaluado_por: profile.id,
+      evaluado_at: new Date().toISOString()
+    }).eq("id", id);
     reload();
   }
 
@@ -1203,7 +1274,10 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
                       src={entrega.imagen_url || `https://img.youtube.com/vi/${entrega.youtube_id}/mqdefault.jpg`}
                       alt="" loading="lazy" />
                     <div className="entrega-row-info">
-                      <div className="entrega-row-name">{entrega.profiles?.nombre || "Alumno"}</div>
+                      <div className="entrega-row-name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {entrega.profiles?.nombre || "Alumno"}
+                        {(entrega.intento || 1) === 2 && <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(96,165,250,0.15)", color: "var(--blue)", border: "1px solid rgba(96,165,250,0.3)", padding: "1px 6px", borderRadius: 10 }}>2do intento</span>}
+                      </div>
                       <div className="entrega-row-sub">
                         {equipo && <span className="equipo-chip" style={{ marginRight: 6 }}>👥 {equipo.nombre}</span>}
                         {formatDate(entrega.created_at)}
@@ -1258,12 +1332,14 @@ function DocenteView({ profile }) {
     pendientes: entregas.filter(e => e.estado === "pendiente").length,
     aprobadas: entregas.filter(e => e.estado === "aprobado").length,
     desaprobadas: entregas.filter(e => e.estado === "desaprobado").length,
+    rehacer: entregas.filter(e => e.estado === "rehacer").length,
   };
 
   const ETABS = [
     { id: "pendiente", label: "Pendientes", n: stats.pendientes },
     { id: "aprobado", label: "Aprobadas", n: stats.aprobadas },
     { id: "desaprobado", label: "Desaprobadas", n: stats.desaprobadas },
+    { id: "rehacer", label: "Rehacer", n: stats.rehacer },
     { id: "todas", label: "Todas" },
   ];
 

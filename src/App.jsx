@@ -1838,11 +1838,23 @@ function AdminView({ profile }) {
 // ── Navbar ─────────────────────────────────────────────────
 function Navbar({ profile }) {
   async function logout() { await supabase.auth.signOut(); }
+  const instructivoUrl = profile?.rol === "alumno"
+    ? "/tutorial_alumno.html"
+    : profile?.rol === "docente"
+      ? "/tutorial_docente.html"
+      : "/tutorial_admin.html";
   return (
     <nav className="nav">
       <img src={LOGO} alt="Logo" style={{ height: 36, display: "block" }} />
       <div className="nav-right">
         {profile && <><span className="nav-user">{profile.nombre}</span><span className={`nav-role ${profile.rol}`}>{profile.rol}</span></>}
+        {profile && (
+          <a href={instructivoUrl} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 13, textDecoration: "none" }}>
+            📖 Instructivo
+          </a>
+        )}
         <button className="btn btn-ghost btn-sm" onClick={logout}>Salir</button>
       </div>
     </nav>

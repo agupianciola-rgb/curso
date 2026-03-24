@@ -580,11 +580,94 @@ function SubirVideoForm({ tarea, alumnoId, equipoId, onGuardado, entregaAnterior
   );
 }
 
+// ── Editar entrega pendiente (alumno) ─────────────────────
+function EditarEntregaForm({ tarea, entrega, onGuardado, onCancelar }) {
+  const esImagen = tarea.tipo === "imagen";
+  const [url, setUrl] = useState(entrega.youtube_url || "");
+  const [descripcion, setDescripcion] = useState(entrega.descripcion || "");
+  const [archivo, setArchivo] = useState(null);
+  const [preview, setPreview] = useState(entrega.imagen_url || null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  function handleArchivo(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setMsg({ type: "error", text: "Solo se aceptan imágenes" });
+    if (file.size > 5 * 1024 * 1024) return setMsg({ type: "error", text: "La imagen no puede superar 5MB" });
+    setArchivo(file); setPreview(URL.createObjectURL(file)); setMsg(null);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault(); setMsg(null); setLoading(true);
+    let updates = { descripcion: descripcion || null };
+
+    if (esImagen) {
+      if (archivo) {
+        const ext = archivo.name.split(".").pop();
+        const path = `${entrega.alumno_id}/${tarea.id}_edit_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("entregas-imagenes").upload(path, archivo);
+        if (uploadError) { setMsg({ type: "error", text: uploadError.message }); setLoading(false); return; }
+        const { data: urlData } = supabase.storage.from("entregas-imagenes").getPublicUrl(path);
+        updates.imagen_url = urlData.publicUrl;
+      }
+    } else {
+      if (url && url !== entrega.youtube_url) {
+        const ytId = extractYoutubeId(url);
+        if (!ytId) { setMsg({ type: "error", text: "URL de YouTube inválida" }); setLoading(false); return; }
+        updates.youtube_url = url;
+        updates.youtube_id = ytId;
+      }
+    }
+
+    const { error } = await supabase.from("entregas").update(updates).eq("id", entrega.id);
+    if (error) setMsg({ type: "error", text: error.message });
+    else onGuardado();
+    setLoading(false);
+  }
+
+  return (
+    <div className="subir-form" style={{ marginTop: 10 }}>
+      <Msg msg={msg} />
+      <form onSubmit={handleSubmit}>
+        {esImagen ? (
+          <div className="form-group">
+            <label className="form-label">Imagen {archivo ? "(nueva seleccionada)" : "(clic para cambiar)"}</label>
+            <label className={`upload-area ${archivo ? "has-file" : ""}`}>
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleArchivo} />
+              {preview ? (
+                <img src={preview} alt="preview" style={{ maxHeight: 140, maxWidth: "100%", objectFit: "contain", borderRadius: 6 }} />
+              ) : (
+                <div style={{ fontSize: 13, color: "var(--text2)" }}>Clic para cambiar la imagen</div>
+              )}
+            </label>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label">Link de YouTube</label>
+            <input className="form-input" type="url" placeholder="https://youtube.com/watch?v=..." value={url} onChange={e => setUrl(e.target.value)} />
+          </div>
+        )}
+        <div className="form-group">
+          <label className="form-label">Comentario (opcional)</label>
+          <textarea className="form-textarea" value={descripcion} onChange={e => setDescripcion(e.target.value)} style={{ minHeight: 56 }} />
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-primary btn-sm" disabled={loading}>{loading ? <><Spinner /> Guardando...</> : "Guardar cambios"}</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Tarea card (alumno) ────────────────────────────────────
 function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVerVideo }) {
   const vencida = isVencida(tarea.fecha_limite) && !entrega;
   const esImagen = tarea.tipo === "imagen";
   const esRehacer = entrega?.estado === "rehacer";
+
+  const [editando, setEditando] = useState(false);
 
   function thumbSrc() {
     if (!entrega) return null;
@@ -613,14 +696,28 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
       <div className="tarea-body">
         {entrega && !esRehacer ? (
           <>
-            <div className="tarea-entrega-preview" onClick={() => onVerVideo(entrega)}>
+            <div className="tarea-entrega-preview" onClick={() => !editando && onVerVideo(entrega)}>
               <img src={thumbSrc()} alt="" style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entrega.titulo}</div>
-                <div style={{ fontSize: 12, color: "var(--text2)" }}>Subido el {formatDate(entrega.created_at)} · clic para ver</div>
+                <div style={{ fontSize: 12, color: "var(--text2)" }}>Subido el {formatDate(entrega.created_at)} · {editando ? "" : "clic para ver"}</div>
               </div>
+              {entrega.estado === "pendiente" && !editando && (
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, flexShrink: 0 }}
+                  onClick={e => { e.stopPropagation(); setEditando(true); }}>
+                  ✎ Editar
+                </button>
+              )}
             </div>
             {entrega.comentario_docente && <div className="modal-comment">💬 {entrega.comentario_docente}</div>}
+            {editando && (
+              <EditarEntregaForm
+                tarea={tarea}
+                entrega={entrega}
+                onGuardado={() => { setEditando(false); onGuardado(); }}
+                onCancelar={() => setEditando(false)}
+              />
+            )}
           </>
         ) : esRehacer ? (
           <div>

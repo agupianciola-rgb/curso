@@ -829,7 +829,12 @@ function AlumnoView({ profile }) {
   };
 
   const stats = {
-    sinentrega: tareas.filter(t => !getEntrega(t.id)).length,
+    sinentrega: tareas.filter(t => {
+      if (getEntrega(t.id)) return false; // ya tiene entrega
+      if (!t.modulo_id) return true; // sin módulo: siempre cuenta
+      const mod = modulos.find(m => m.id === t.modulo_id);
+      return mod?.habilitado !== false; // solo cuenta si el módulo está habilitado
+    }).length,
     aprobadas: entregas.filter(e => e.estado === "aprobado").length,
     pendientes: entregas.filter(e => e.estado === "pendiente").length,
     rehacer: entregas.filter(e => e.estado === "rehacer").length,
@@ -849,7 +854,12 @@ function AlumnoView({ profile }) {
       const todasDeEsta = entregas.filter(e => e.tarea_id === tarea.id);
       return todasDeEsta.some(e => e.estado === "rehacer");
     }
-    if (filtroEstado === "sinentrega") return !entrega;
+    if (filtroEstado === "sinentrega") {
+      if (entrega) return false;
+      if (!tarea.modulo_id) return true;
+      const mod = modulos.find(m => m.id === tarea.modulo_id);
+      return mod?.habilitado !== false;
+    }
     return true;
   }
 

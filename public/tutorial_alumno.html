@@ -87,6 +87,13 @@ h1 span{color:var(--gold)}
         <div class="step"><div class="num">3</div><div class="step-text"><strong>Hacé clic en "↩ Rehacer entrega"</strong><span>Subí una nueva versión. Solo podés hacerlo una vez</span></div></div>
       </div>
 
+      <div class="card">
+        <div class="card-title">Ver ejemplo</div>
+        <div class="step"><div class="num">1</div><div class="step-text"><strong>Algunas tareas tienen un ejemplo de referencia</strong><span>Lo cargó el docente para orientarte en cómo hacer la entrega</span></div></div>
+        <div class="step"><div class="num">2</div><div class="step-text"><strong>Buscá el link <span style="color:var(--gold)">★ Ver ejemplo</span> debajo de la consigna</strong><span>Aparece solo si la tarea tiene un ejemplo disponible</span></div></div>
+        <div class="step"><div class="num">3</div><div class="step-text"><strong>Hacé clic para abrirlo</strong><span>Se abre en un modal dentro de la app, ya sea el video o la imagen de referencia</span></div></div>
+      </div>
+
     </div>
 
     <!-- Columna derecha: mocks -->
@@ -109,12 +116,18 @@ h1 span{color:var(--gold)}
           </div>
           <div class="tag-mod">Módulo 1 — Fundamentos</div>
           <div class="mock-row">
-            <div><div class="mock-task-title">TP 1 — Video presentación</div><div class="mock-task-sub">▶ Video</div></div>
+            <div>
+              <div class="mock-task-title">TP 1 — Video presentación</div>
+              <div class="mock-task-sub">▶ Video</div>
+            </div>
             <div class="badge b-ok">● Aprobado</div>
           </div>
-          <div class="mock-row">
-            <div><div class="mock-task-title">TP 2 — Caso clínico</div><div class="mock-task-sub">🖼️ Imagen</div></div>
-            <div class="badge b-pend">● En revisión</div>
+          <div class="mock-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+              <div><div class="mock-task-title">TP 2 — Caso clínico</div><div class="mock-task-sub">🖼️ Imagen</div></div>
+              <div class="badge b-none">● Sin entrega</div>
+            </div>
+            <span style="font-size:11px;color:var(--gold);font-weight:500">★ Ver ejemplo</span>
           </div>
           <div class="tag-mod" style="margin-top:4px">Módulo 2 — Práctica</div>
           <div class="mock-row">
@@ -123,7 +136,7 @@ h1 span{color:var(--gold)}
           </div>
           <div class="mock-row">
             <div><div class="mock-task-title">TP 4 — Presentación final</div><div class="mock-task-sub">▶ Video</div></div>
-            <div class="badge b-none">● Sin entrega</div>
+            <div class="badge b-pend">● En revisión</div>
           </div>
         </div>
       </div>
@@ -140,6 +153,11 @@ h1 span{color:var(--gold)}
       <div class="tip">
         <strong>Editar mientras está pendiente</strong><br>
         Si todavía está "En revisión" podés hacer clic en <b style="color:var(--text)">✎ Editar</b> para cambiar el video, la imagen o el comentario antes de que el docente lo evalúe.
+      </div>
+
+      <div class="tip">
+        <strong>★ Ejemplos de referencia</strong><br>
+        Algunas tareas tienen un ejemplo cargado por el docente. Si ves el link dorado <b style="color:var(--gold)">★ Ver ejemplo</b> debajo del nombre de la tarea, hacé clic para ver el video o imagen de referencia antes de subir tu entrega.
       </div>
 
     </div>

@@ -437,6 +437,7 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
       <div className="tarea-header">
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            {tarea.orden && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 6, padding: "1px 7px", flexShrink: 0 }}>#{tarea.orden}</span>}
             <div className="tarea-titulo">{tarea.titulo}</div>
             <span className={`tipo-badge ${esImagen ? "tipo-badge-imagen" : "tipo-badge-video"}`}>
               {esImagen ? "🖼️ Imagen" : "▶ Video"}
@@ -486,7 +487,7 @@ function AlumnoView({ profile }) {
     const [c, mod, t, e, eq] = await Promise.all([
       supabase.from("cursos").select("*").order("nombre"),
       supabase.from("modulos").select("*").order("orden"),
-      supabase.from("tareas").select("*").order("created_at", { ascending: true }),
+      supabase.from("tareas").select("*").order("orden", { ascending: true }),
       supabase.from("entregas").select("*").eq("alumno_id", profile.id),
       supabase.from("equipo_miembros").select("*, equipos(id, nombre, curso_id)").eq("alumno_id", profile.id),
     ]);
@@ -760,76 +761,122 @@ function TabTareas({ cursos, modulos, tareas, reload }) {
 
   const modulosDelCurso = modulos.filter(m => m.curso_id === form.curso_id);
 
+  // Calcula el próximo orden para el grupo curso+módulo
+  function nextOrden(cursoId, moduloId) {
+    const grupo = tareas.filter(t =>
+      t.curso_id === cursoId &&
+      (moduloId ? t.modulo_id === moduloId : !t.modulo_id)
+    );
+    return grupo.length > 0 ? Math.max(...grupo.map(t => t.orden || 0)) + 1 : 1;
+  }
+
+  // Renumera sin huecos el grupo curso+módulo después de un cambio
+  async function reordenar(cursoId, moduloId) {
+    await supabase.rpc("reordenar_tareas", {
+      p_curso_id: cursoId,
+      p_modulo_id: moduloId || null,
+    });
+  }
+
   async function crear(e) {
     e.preventDefault(); setLoading(true); setMsg(null);
     const u = (await supabase.auth.getUser()).data.user;
+    const orden = nextOrden(form.curso_id, form.modulo_id || null);
     const { error } = await supabase.from("tareas").insert({
       titulo: form.titulo, descripcion: form.descripcion || null,
       curso_id: form.curso_id, docente_id: u.id,
       modulo_id: form.modulo_id || null,
       fecha_limite: form.fecha_limite || null,
-      tipo: form.tipo,
+      tipo: form.tipo, orden,
     });
     if (error) setMsg({ type: "error", text: error.message });
     else { setMsg({ type: "success", text: "Tarea creada" }); setForm(f => ({ ...f, titulo: "", descripcion: "", modulo_id: "", fecha_limite: "", tipo: "video" })); reload(); }
     setLoading(false);
   }
-  async function editar(id, vals) {
+
+  async function editar(id, vals, tareaActual) {
+    const nuevoOrden = Number(vals.orden);
+    const ordenActual = tareaActual.orden;
+    const cursoId = tareaActual.curso_id;
+    const moduloId = vals.modulo_id || null;
+
+    // Si cambió el orden, hacer espacio desplazando las demás
+    if (nuevoOrden !== ordenActual) {
+      const grupo = tareas
+        .filter(t => t.id !== id && t.curso_id === cursoId &&
+          (moduloId ? t.modulo_id === moduloId : !t.modulo_id))
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+      // Reordenar para hacer hueco en la posición deseada
+      let i = 1;
+      for (const t of grupo) {
+        if (i === nuevoOrden) i++;
+        await supabase.from("tareas").update({ orden: i }).eq("id", t.id);
+        i++;
+      }
+    }
+
     const { error } = await supabase.from("tareas").update({
       titulo: vals.titulo, descripcion: vals.descripcion || null,
-      modulo_id: vals.modulo_id || null, fecha_limite: vals.fecha_limite || null,
-      tipo: vals.tipo || "video",
+      modulo_id: moduloId, fecha_limite: vals.fecha_limite || null,
+      tipo: vals.tipo || "video", orden: nuevoOrden,
     }).eq("id", id);
-    if (!error) reload();
+    if (!error) {
+      await reordenar(cursoId, moduloId);
+      reload();
+    }
   }
+
   async function eliminar(id) {
+    const tarea = tareas.find(t => t.id === id);
     const { error } = await supabase.from("tareas").delete().eq("id", id);
-    if (error) alert("Error al eliminar: " + error.message);
-    else reload();
+    if (error) { alert("Error al eliminar: " + error.message); return; }
+    if (tarea) await reordenar(tarea.curso_id, tarea.modulo_id || null);
+    reload();
   }
 
   if (cursos.length === 0) return <div className="empty"><div className="empty-icon">📝</div><div className="empty-title">Primero creá un curso</div></div>;
 
-  // Filtrar tareas según el módulo seleccionado
   const tareasFiltradas = filterModulo === "todos"
     ? tareas
     : filterModulo === "sin-modulo"
       ? tareas.filter(t => !t.modulo_id)
       : tareas.filter(t => t.modulo_id === filterModulo);
 
-  // Agrupar por módulo cuando se muestra "todos"
   const grupos = filterModulo === "todos"
     ? [
         ...modulos.map(mod => ({
-          key: mod.id,
-          label: mod.nombre,
-          tareas: tareas.filter(t => t.modulo_id === mod.id),
+          key: mod.id, label: mod.nombre,
+          tareas: tareas.filter(t => t.modulo_id === mod.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)),
         })),
-        {
-          key: "sin-modulo",
-          label: "Sin módulo",
-          tareas: tareas.filter(t => !t.modulo_id),
-        },
+        { key: "sin-modulo", label: "Sin módulo", tareas: tareas.filter(t => !t.modulo_id).sort((a, b) => (a.orden || 0) - (b.orden || 0)) },
       ].filter(g => g.tareas.length > 0)
-    : [{ key: "filtrado", label: null, tareas: tareasFiltradas }];
+    : [{ key: "filtrado", label: null, tareas: [...tareasFiltradas].sort((a, b) => (a.orden || 0) - (b.orden || 0)) }];
 
   function renderTarea(t) {
     const curso = cursos.find(c => c.id === t.curso_id);
     const modulosDelCursoT = modulos.filter(m => m.curso_id === t.curso_id);
+    const grupoTareas = tareas.filter(tx =>
+      tx.curso_id === t.curso_id &&
+      (t.modulo_id ? tx.modulo_id === t.modulo_id : !tx.modulo_id)
+    );
+    const maxOrden = grupoTareas.length;
     return (
       <EditableRow key={t.id}
         fields={[
+          { key: "orden", label: "Orden", value: String(t.orden || 1), type: "number" },
           { key: "titulo", label: "Título", value: t.titulo },
           { key: "tipo", label: "Tipo", value: t.tipo || "video", type: "select", options: [{ value: "video", label: "▶ Video (YouTube)" }, { value: "imagen", label: "🖼️ Imagen (archivo)" }] },
           { key: "descripcion", label: "Consigna", value: t.descripcion, type: "textarea" },
           { key: "modulo_id", label: "Módulo", value: t.modulo_id || "", type: "select", options: [{ value: "", label: "Sin módulo" }, ...modulosDelCursoT.map(m => ({ value: m.id, label: m.nombre }))] },
           { key: "fecha_limite", label: "Fecha límite", value: t.fecha_limite ? new Date(t.fecha_limite).toISOString().slice(0, 16) : "", type: "datetime-local" },
         ]}
-        onSave={vals => editar(t.id, vals)}
+        onSave={vals => editar(t.id, vals, t)}
         onDelete={() => eliminar(t.id)}
         deleteConfirm="¿Eliminar esta tarea y sus entregas?"
       >
         <div className="item-row-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)", minWidth: 20 }}>#{t.orden}</span>
           {t.titulo}
           <span className={`tipo-badge ${t.tipo === "imagen" ? "tipo-badge-imagen" : "tipo-badge-video"}`}>
             {t.tipo === "imagen" ? "🖼️ Imagen" : "▶ Video"}
@@ -1086,6 +1133,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
             <div key={tareaId || "sin-tarea"} className="card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
                 {mod && <span className="modulo-label">{mod.nombre}</span>}
+                {tarea?.orden && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)" }}>#{tarea.orden}</span>}
                 <span style={{ fontWeight: 500 }}>{tarea?.titulo || "Sin tarea"}</span>
                 <span style={{ fontSize: 12, color: "var(--text3)", marginLeft: "auto" }}>{entregasDeTarea.length} entrega(s)</span>
               </div>
@@ -1133,7 +1181,7 @@ function DocenteView({ profile }) {
     const [c, mod, t, eq, e] = await Promise.all([
       supabase.from("cursos").select("*").order("nombre"),
       supabase.from("modulos").select("*").order("orden"),
-      supabase.from("tareas").select("*").order("created_at"),
+      supabase.from("tareas").select("*").order("orden", { ascending: true }),
       supabase.from("equipos").select("*").order("nombre"),
       supabase.from("entregas")
         .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo)")
@@ -1345,7 +1393,7 @@ function AdminView({ profile }) {
     const [c, mod, t, eq, al, doc] = await Promise.all([
       supabase.from("cursos").select("*").order("nombre"),
       supabase.from("modulos").select("*").order("orden"),
-      supabase.from("tareas").select("*").order("created_at"),
+      supabase.from("tareas").select("*").order("orden", { ascending: true }),
       supabase.from("equipos").select("*").order("nombre"),
       supabase.from("profiles").select("*").eq("rol", "alumno").order("nombre"),
       supabase.from("profiles").select("*").eq("rol", "docente").order("nombre"),

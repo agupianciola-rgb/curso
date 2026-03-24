@@ -165,7 +165,14 @@ const CSS = `
   .modal-comment { font-size:13px; color:var(--text2); padding:10px 14px; background:var(--bg3); border-radius:var(--radius); border-left:2px solid var(--border2); }
   /* Subir form */
   .subir-form { background:var(--bg3); border:1px dashed var(--border2); border-radius:var(--radius); padding:14px; }
-  .tipo-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; }
+  .toggle-wrap { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .toggle { width:36px; height:20px; border-radius:10px; border:none; position:relative; cursor:pointer; transition:background 0.2s; flex-shrink:0; }
+  .toggle.on { background:var(--green); }
+  .toggle.off { background:var(--border2); }
+  .toggle::after { content:''; position:absolute; width:14px; height:14px; border-radius:50%; background:#fff; top:3px; transition:left 0.2s; }
+  .toggle.on::after { left:19px; }
+  .toggle.off::after { left:3px; }
+  .vigente-chip { font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; background:rgba(74,222,128,0.1); color:var(--green); border:1px solid rgba(74,222,128,0.25); }
   .tipo-badge-video { background:rgba(96,165,250,0.1); color:var(--blue); border:1px solid rgba(96,165,250,0.2); }
   .tipo-badge-imagen { background:rgba(45,212,191,0.1); color:var(--teal); border:1px solid rgba(45,212,191,0.2); }
   .imagen-preview { width:100%; max-height:320px; object-fit:contain; border-radius:var(--radius); background:var(--bg3); display:block; cursor:zoom-in; }
@@ -635,14 +642,17 @@ function AlumnoView({ profile }) {
 
   async function loadData() {
     setLoading(true);
-    const [c, mod, t, e, eq] = await Promise.all([
-      supabase.from("cursos").select("*").order("nombre"),
-      supabase.from("modulos").select("*").order("orden"),
-      supabase.from("tareas").select("*").order("orden", { ascending: true }),
+    // Obtener solo el curso vigente
+    const { data: cursoVigente } = await supabase.from("cursos").select("*").eq("vigente", true).maybeSingle();
+    const cursoId = cursoVigente?.id;
+
+    const [mod, t, e, eq] = await Promise.all([
+      cursoId ? supabase.from("modulos").select("*").eq("curso_id", cursoId).order("orden") : Promise.resolve({ data: [] }),
+      cursoId ? supabase.from("tareas").select("*").eq("curso_id", cursoId).order("orden", { ascending: true }) : Promise.resolve({ data: [] }),
       supabase.from("entregas").select("*").eq("alumno_id", profile.id),
       supabase.from("equipo_miembros").select("*, equipos(id, nombre, curso_id)").eq("alumno_id", profile.id),
     ]);
-    if (c.data) setCursos(c.data);
+    setCursos(cursoVigente ? [cursoVigente] : []);
     if (mod.data) setModulos(mod.data);
     if (t.data) setTareas(t.data);
     if (e.data) setEntregas(e.data);
@@ -861,7 +871,7 @@ function TabCursos({ cursos, tareas, modulos, equipos, reload }) {
 
   async function crear(e) {
     e.preventDefault(); setLoading(true); setMsg(null);
-    const { error } = await supabase.from("cursos").insert({ nombre: form.nombre, descripcion: form.descripcion });
+    const { error } = await supabase.from("cursos").insert({ nombre: form.nombre, descripcion: form.descripcion, vigente: false });
     if (error) setMsg({ type: "error", text: error.message });
     else { setMsg({ type: "success", text: "Curso creado" }); setForm({ nombre: "", descripcion: "" }); reload(); }
     setLoading(false);
@@ -875,20 +885,28 @@ function TabCursos({ cursos, tareas, modulos, equipos, reload }) {
     if (error) alert("Error al eliminar: " + error.message);
     else reload();
   }
+  async function toggleVigente(id, actual) {
+    if (actual) return; // si ya está vigente no hacer nada al clickear de nuevo
+    const { error } = await supabase.from("cursos").update({ vigente: true }).eq("id", id);
+    if (!error) reload();
+  }
+
+  const vigente = cursos.find(c => c.vigente);
 
   return (
     <div className="grid-2" style={{ alignItems: "start" }}>
       <div className="card">
         <div className="section-title" style={{ marginBottom: 20 }}>Nuevo curso</div>
         <Msg msg={msg} />
+        {!vigente && <div className="alert alert-error" style={{ marginBottom: 16 }}>⚠️ No hay ningún curso vigente. Marcá uno como vigente para que alumnos y docentes puedan usarlo.</div>}
         <form onSubmit={crear}>
-          <div className="form-group"><label className="form-label">Nombre</label><input className="form-input" type="text" placeholder="Ej: Producción Audiovisual" value={form.nombre} onChange={e => set("nombre", e.target.value)} required /></div>
+          <div className="form-group"><label className="form-label">Nombre</label><input className="form-input" type="text" placeholder="Ej: Residencia Anestesiología 2026" value={form.nombre} onChange={e => set("nombre", e.target.value)} required /></div>
           <div className="form-group"><label className="form-label">Descripción (opcional)</label><textarea className="form-textarea" value={form.descripcion} onChange={e => set("descripcion", e.target.value)} /></div>
           <button className="btn btn-primary" disabled={loading}>{loading ? <><Spinner /> Creando...</> : "Crear curso"}</button>
         </form>
       </div>
       <div>
-        <div className="section-title" style={{ marginBottom: 14 }}>Cursos existentes</div>
+        <div className="section-title" style={{ marginBottom: 14 }}>Cursos</div>
         {cursos.length === 0 ? <div className="empty" style={{ padding: "24px 0" }}><div className="empty-sub">No hay cursos</div></div>
           : cursos.map(c => (
             <EditableRow key={c.id}
@@ -897,8 +915,17 @@ function TabCursos({ cursos, tareas, modulos, equipos, reload }) {
               onDelete={() => eliminar(c.id)}
               deleteConfirm="¿Eliminar este curso? Se eliminarán también sus módulos, tareas, equipos y entregas."
             >
-              <div className="item-row-title">{c.nombre}</div>
-              <div className="item-row-sub">{modulos.filter(m => m.curso_id === c.id).length} módulo(s) · {tareas.filter(t => t.curso_id === c.id).length} tarea(s) · {equipos.filter(eq => eq.curso_id === c.id).length} equipo(s)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div className="item-row-title" style={{ flex: 1 }}>{c.nombre}</div>
+                {c.vigente && <span className="vigente-chip">● Vigente</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6 }}>
+                <div className="item-row-sub">{modulos.filter(m => m.curso_id === c.id).length} módulo(s) · {tareas.filter(t => t.curso_id === c.id).length} tarea(s) · {equipos.filter(eq => eq.curso_id === c.id).length} equipo(s)</div>
+                <label className="toggle-wrap" onClick={e => { e.stopPropagation(); toggleVigente(c.id, c.vigente); }}>
+                  <div className={`toggle ${c.vigente ? "on" : "off"}`} />
+                  <span style={{ fontSize: 12, color: c.vigente ? "var(--green)" : "var(--text3)" }}>{c.vigente ? "Curso vigente" : "Marcar vigente"}</span>
+                </label>
+              </div>
             </EditableRow>
           ))}
       </div>
@@ -1290,7 +1317,7 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
 }
 
 // ── Tab Entregas (docente) ─────────────────────────────────
-function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filterEstado, reload }) {
+function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filterEstado, reload, sinFiltroCurso }) {
   const [filterCurso, setFilterCurso] = useState("todos");
   const [filterModulo, setFilterModulo] = useState("todos");
   const [filterTarea, setFilterTarea] = useState("todas");
@@ -1338,10 +1365,12 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
   return (
     <>
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        <select className="form-select" style={{ maxWidth: 180 }} value={filterCurso} onChange={e => { setFilterCurso(e.target.value); setFilterModulo("todos"); setFilterTarea("todas"); setFilterEquipo("todos"); }}>
-          <option value="todos">Todos los cursos</option>
-          {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </select>
+        {!sinFiltroCurso && (
+          <select className="form-select" style={{ maxWidth: 180 }} value={filterCurso} onChange={e => { setFilterCurso(e.target.value); setFilterModulo("todos"); setFilterTarea("todas"); setFilterEquipo("todos"); }}>
+            <option value="todos">Todos los cursos</option>
+            {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        )}
         <select className="form-select" style={{ maxWidth: 200 }} value={filterModulo} onChange={e => { setFilterModulo(e.target.value); setFilterTarea("todas"); }}>
           <option value="todos">Todos los módulos</option>
           {modulosFiltrados.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
@@ -1403,7 +1432,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
 
 // ── Docente View (solo entregas) ───────────────────────────
 function DocenteView({ profile }) {
-  const [cursos, setCursos] = useState([]);
+  const [cursoVigenteData, setCursoVigenteData] = useState(null);
   const [modulos, setModulos] = useState([]);
   const [tareas, setTareas] = useState([]);
   const [equipos, setEquipos] = useState([]);
@@ -1415,17 +1444,20 @@ function DocenteView({ profile }) {
 
   async function loadData() {
     setLoading(true);
-    const [c, mod, t, eq, e] = await Promise.all([
-      supabase.from("cursos").select("*").order("nombre"),
-      supabase.from("modulos").select("*").order("orden"),
-      supabase.from("tareas").select("*").order("orden", { ascending: true }),
-      supabase.from("equipos").select("*").order("nombre"),
+    // Obtener solo el curso vigente
+    const { data: cursoVigente } = await supabase.from("cursos").select("*").eq("vigente", true).maybeSingle();
+    const cursoId = cursoVigente?.id;
+
+    const [mod, t, eq, e] = await Promise.all([
+      cursoId ? supabase.from("modulos").select("*").eq("curso_id", cursoId).order("orden") : Promise.resolve({ data: [] }),
+      cursoId ? supabase.from("tareas").select("*").eq("curso_id", cursoId).order("orden", { ascending: true }) : Promise.resolve({ data: [] }),
+      cursoId ? supabase.from("equipos").select("*").eq("curso_id", cursoId).order("nombre") : Promise.resolve({ data: [] }),
       supabase.from("entregas")
         .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo)")
         .eq("docente_asignado_id", profile.id)
         .order("created_at", { ascending: false }),
     ]);
-    if (c.data) setCursos(c.data);
+    setCursoVigenteData(cursoVigente || null);
     if (mod.data) setModulos(mod.data);
     if (t.data) setTareas(t.data);
     if (eq.data) setEquipos(eq.data);
@@ -1451,7 +1483,10 @@ function DocenteView({ profile }) {
   return (
     <main className="main">
       <div className="page-title">Panel docente</div>
-      <div className="page-sub">Hola, {profile.nombre}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
+        <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {profile.nombre}</span>
+        {cursoVigenteData && <span className="vigente-chip">📚 {cursoVigenteData.nombre}</span>}
+      </div>
 
       <div className="grid-3" style={{ marginBottom: 32 }}>
         <div className="stat-card"><div className="stat-num" style={{ color: "var(--amber)" }}>{stats.pendientes}</div><div className="stat-label">Pendientes de revisión</div></div>
@@ -1469,7 +1504,7 @@ function DocenteView({ profile }) {
       </div>
 
       {loading ? <div className="loading-center"><Spinner /> Cargando...</div> : (
-        <TabEntregas entregas={entregas} tareas={tareas} modulos={modulos} cursos={cursos} equipos={equipos} profile={profile} filterEstado={entregaTab} reload={loadData} />
+        <TabEntregas entregas={entregas} tareas={tareas} modulos={modulos} cursos={cursoVigenteData ? [cursoVigenteData] : []} equipos={equipos} profile={profile} filterEstado={entregaTab} reload={loadData} sinFiltroCurso />
       )}
     </main>
   );

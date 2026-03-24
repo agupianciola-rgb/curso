@@ -708,10 +708,12 @@ function EditarEntregaForm({ tarea, entrega, onGuardado, onCancelar }) {
 }
 
 // ── Tarea card (alumno) ────────────────────────────────────
-function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVerVideo }) {
+function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVerVideo, moduloHabilitado = true }) {
   const vencida = isVencida(tarea.fecha_limite) && !entrega;
   const esImagen = tarea.tipo === "imagen";
   const esRehacer = entrega?.estado === "rehacer";
+  // Si el módulo está deshabilitado, no se puede subir ni rehacer
+  const puedeCargar = moduloHabilitado;
 
   const [editando, setEditando] = useState(false);
 
@@ -748,7 +750,7 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
                 <div style={{ fontSize: 14, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entrega.titulo}</div>
                 <div style={{ fontSize: 12, color: "var(--text2)" }}>Subido el {formatDate(entrega.created_at)} · {editando ? "" : "clic para ver"}</div>
               </div>
-              {entrega.estado === "pendiente" && !editando && (
+              {entrega.estado === "pendiente" && !editando && puedeCargar && (
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, flexShrink: 0 }}
                   onClick={e => { e.stopPropagation(); setEditando(true); }}>
                   ✎ Editar
@@ -768,15 +770,15 @@ function TareaCardAlumno({ tarea, entrega, alumnoId, equipoId, onGuardado, onVer
         ) : esRehacer ? (
           <div>
             <div style={{ marginBottom: 10, padding: "10px 12px", background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--blue)", marginBottom: 4 }}>Entrega desaprobada — podés subir una nueva versión</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--blue)", marginBottom: 4 }}>Entrega desaprobada — {puedeCargar ? "podés subir una nueva versión" : "el módulo está cerrado"}</div>
               {entrega.comentario_docente && <div style={{ fontSize: 12, color: "var(--text2)" }}>💬 "{entrega.comentario_docente}"</div>}
               <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>Entrega anterior del {formatDate(entrega.created_at)} · <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => onVerVideo(entrega)}>ver</span></div>
             </div>
-            <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} entregaAnterior={entrega} />
+            {puedeCargar && <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} entregaAnterior={entrega} />}
           </div>
-        ) : (
+        ) : puedeCargar ? (
           <SubirVideoForm tarea={tarea} alumnoId={alumnoId} equipoId={equipoId} onGuardado={onGuardado} />
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -857,10 +859,18 @@ function AlumnoView({ profile }) {
     const tareasSinModulo = tareas.filter(t => t.curso_id === curso.id && !t.modulo_id && tareaVisible(t));
     return {
       curso,
-      modulosDeCurso: modulosDeCurso.map(mod => ({
-        mod,
-        tareasFiltradas: tareas.filter(t => t.modulo_id === mod.id && tareaVisible(t))
-      })).filter(m => m.tareasFiltradas.length > 0),
+      modulosDeCurso: modulosDeCurso.map(mod => {
+        const habilitado = mod.habilitado !== false;
+        const todasLasTareas = tareas.filter(t => t.modulo_id === mod.id);
+        // Si deshabilitado: solo mostrar tareas que ya tienen entrega O están en rehacer
+        const tareasFiltradas = habilitado
+          ? todasLasTareas.filter(t => tareaVisible(t))
+          : todasLasTareas.filter(t => {
+              const entrega = getEntrega(t.id);
+              return (entrega || false) && tareaVisible(t);
+            });
+        return { mod, tareasFiltradas, habilitado };
+      }).filter(m => m.tareasFiltradas.length > 0),
       tareasSinModulo,
     };
   }).filter(g => g.modulosDeCurso.length > 0 || g.tareasSinModulo.length > 0);
@@ -931,15 +941,16 @@ function AlumnoView({ profile }) {
           <div key={curso.id} style={{ marginBottom: 40 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>{curso.nombre}</div>
 
-            {modulosDeCurso.map(({ mod, tareasFiltradas }) => (
+            {modulosDeCurso.map(({ mod, tareasFiltradas, habilitado }) => (
               <div key={mod.id} className="modulo-block">
                 <div className="modulo-header">
                   <span className="modulo-label">Módulo</span>
                   <span className="modulo-name">{mod.nombre}</span>
                   {mod.descripcion && <span style={{ fontSize: 13, color: "var(--text2)" }}>— {mod.descripcion}</span>}
+                  {!habilitado && <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(248,113,113,0.08)", color: "var(--red)", border: "1px solid rgba(248,113,113,0.2)", padding: "2px 8px", borderRadius: 10, marginLeft: 4 }}>🔒 Cerrado</span>}
                 </div>
                 {tareasFiltradas.map(tarea => (
-                  <TareaCardAlumno key={tarea.id} tarea={tarea} entrega={getEntrega(tarea.id)} alumnoId={profile.id} equipoId={equipoId} onGuardado={loadData} onVerVideo={setSelected} />
+                  <TareaCardAlumno key={tarea.id} tarea={tarea} entrega={getEntrega(tarea.id)} alumnoId={profile.id} equipoId={equipoId} onGuardado={loadData} onVerVideo={setSelected} moduloHabilitado={habilitado} />
                 ))}
               </div>
             ))}
@@ -1101,7 +1112,7 @@ function TabModulos({ cursos, modulos, tareas, reload }) {
   async function crear(e) {
     e.preventDefault(); setLoading(true); setMsg(null);
     const u = (await supabase.auth.getUser()).data.user;
-    const { error } = await supabase.from("modulos").insert({ nombre: form.nombre, descripcion: form.descripcion, curso_id: form.curso_id, docente_id: u.id, orden: Number(form.orden) });
+    const { error } = await supabase.from("modulos").insert({ nombre: form.nombre, descripcion: form.descripcion, curso_id: form.curso_id, docente_id: u.id, orden: Number(form.orden), habilitado: true });
     if (error) setMsg({ type: "error", text: error.message });
     else { setMsg({ type: "success", text: "Módulo creado" }); setForm(f => ({ ...f, nombre: "", descripcion: "", orden: 0 })); reload(); }
     setLoading(false);
@@ -1114,6 +1125,10 @@ function TabModulos({ cursos, modulos, tareas, reload }) {
     const { error } = await supabase.from("modulos").delete().eq("id", id);
     if (error) alert("Error al eliminar: " + error.message);
     else reload();
+  }
+  async function toggleHabilitado(id, actual) {
+    await supabase.from("modulos").update({ habilitado: !actual }).eq("id", id);
+    reload();
   }
 
   if (cursos.length === 0) return <div className="empty"><div className="empty-icon">📦</div><div className="empty-title">Primero creá un curso</div></div>;
@@ -1134,21 +1149,35 @@ function TabModulos({ cursos, modulos, tareas, reload }) {
       <div>
         <div className="section-title" style={{ marginBottom: 14 }}>Módulos existentes</div>
         {modulos.length === 0 ? <div className="empty" style={{ padding: "24px 0" }}><div className="empty-sub">No hay módulos</div></div>
-          : modulos.map(m => (
-            <EditableRow key={m.id}
-              fields={[
-                { key: "nombre", label: "Nombre", value: m.nombre },
-                { key: "descripcion", label: "Descripción", value: m.descripcion, type: "textarea" },
-                { key: "orden", label: "Orden", value: String(m.orden ?? 0), type: "number" },
-              ]}
-              onSave={vals => editar(m.id, vals)}
-              onDelete={() => eliminar(m.id)}
-              deleteConfirm="¿Eliminar este módulo? Las tareas quedarán sin módulo."
-            >
-              <div className="item-row-title">{m.nombre}</div>
-              <div className="item-row-sub">{cursos.find(c => c.id === m.curso_id)?.nombre} · orden {m.orden} · {tareas.filter(t => t.modulo_id === m.id).length} tarea(s)</div>
-            </EditableRow>
-          ))}
+          : modulos.map(m => {
+            const habilitado = m.habilitado !== false;
+            return (
+              <EditableRow key={m.id}
+                fields={[
+                  { key: "nombre", label: "Nombre", value: m.nombre },
+                  { key: "descripcion", label: "Descripción", value: m.descripcion, type: "textarea" },
+                  { key: "orden", label: "Orden", value: String(m.orden ?? 0), type: "number" },
+                ]}
+                onSave={vals => editar(m.id, vals)}
+                onDelete={() => eliminar(m.id)}
+                deleteConfirm="¿Eliminar este módulo? Las tareas quedarán sin módulo."
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="item-row-title" style={{ flex: 1 }}>{m.nombre}</div>
+                  {!habilitado && <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(248,113,113,0.1)", color: "var(--red)", border: "1px solid rgba(248,113,113,0.2)", padding: "1px 7px", borderRadius: 10 }}>Deshabilitado</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6 }}>
+                  <div className="item-row-sub">{cursos.find(c => c.id === m.curso_id)?.nombre} · orden {m.orden} · {tareas.filter(t => t.modulo_id === m.id).length} tarea(s)</div>
+                  <label className="toggle-wrap" onClick={e => { e.stopPropagation(); toggleHabilitado(m.id, habilitado); }}>
+                    <div className={`toggle ${habilitado ? "on" : "off"}`} />
+                    <span style={{ fontSize: 12, color: habilitado ? "var(--green)" : "var(--text3)" }}>
+                      {habilitado ? "Habilitado" : "Deshabilitado"}
+                    </span>
+                  </label>
+                </div>
+              </EditableRow>
+            );
+          })}
       </div>
     </div>
   );

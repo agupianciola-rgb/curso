@@ -479,7 +479,7 @@ function AlumnoView({ profile }) {
   const [miEquipo, setMiEquipo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroEstado, setFiltroEstado] = useState("ninguno");
   const [filtroModulo, setFiltroModulo] = useState("todos");
 
   useEffect(() => { loadData(); }, []);
@@ -504,7 +504,7 @@ function AlumnoView({ profile }) {
   const getEntrega = (tareaId) => entregas.find(e => e.tarea_id === tareaId) || null;
 
   const stats = {
-    total: tareas.length,
+    sinentrega: tareas.filter(t => !getEntrega(t.id)).length,
     aprobadas: entregas.filter(e => e.estado === "aprobado").length,
     pendientes: entregas.filter(e => e.estado === "pendiente").length,
     desaprobadas: entregas.filter(e => e.estado === "desaprobado").length,
@@ -514,7 +514,7 @@ function AlumnoView({ profile }) {
   function tareaVisible(tarea) {
     const entrega = getEntrega(tarea.id);
     if (filtroModulo !== "todos" && tarea.modulo_id !== filtroModulo) return false;
-    if (filtroEstado === "todas") return true;
+    if (filtroEstado === "ninguno") return true;
     if (filtroEstado === "aprobado") return entrega?.estado === "aprobado";
     if (filtroEstado === "pendiente") return entrega?.estado === "pendiente";
     if (filtroEstado === "desaprobado") return entrega?.estado === "desaprobado";
@@ -543,8 +543,8 @@ function AlumnoView({ profile }) {
     return (
       <div
         className="stat-card"
-        onClick={() => setFiltroEstado(active ? "todas" : estado)}
-        style={{ cursor: "pointer", transition: "all 0.15s", outline: active ? `2px solid ${color}` : "2px solid transparent", outlineOffset: 2 }}
+        onClick={() => setFiltroEstado(active ? "ninguno" : estado)}
+        style={{ cursor: "pointer", transition: "all 0.15s", outline: active ? `2px solid ${color}` : "2px solid transparent", outlineOffset: 2, opacity: filtroEstado !== "ninguno" && !active ? 0.5 : 1 }}
       >
         <div className="stat-num" style={{ color }}>{value}</div>
         <div className="stat-label">{label}</div>
@@ -563,7 +563,7 @@ function AlumnoView({ profile }) {
 
       {/* Stats clickeables */}
       <div className="grid-4" style={{ marginBottom: 20 }}>
-        <StatCard label="Tareas totales" value={stats.total} color="var(--accent)" estado="todas" />
+        <StatCard label="Sin entregar" value={stats.sinentrega} color="var(--text2)" estado="sinentrega" />
         <StatCard label="Aprobadas" value={stats.aprobadas} color="var(--green)" estado="aprobado" />
         <StatCard label="En revisión" value={stats.pendientes} color="var(--amber)" estado="pendiente" />
         <StatCard label="Desaprobadas" value={stats.desaprobadas} color="var(--red)" estado="desaprobado" />
@@ -580,10 +580,10 @@ function AlumnoView({ profile }) {
           <option value="todos">Todos los módulos</option>
           {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
         </select>
-        {(filtroEstado !== "todas" || filtroModulo !== "todos") && (
+        {(filtroEstado !== "ninguno" || filtroModulo !== "todos") && (
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => { setFiltroEstado("todas"); setFiltroModulo("todos"); }}
+            onClick={() => { setFiltroEstado("ninguno"); setFiltroModulo("todos"); }}
           >
             ✕ Limpiar filtros
           </button>
@@ -594,8 +594,8 @@ function AlumnoView({ profile }) {
         : estructura.length === 0 ? (
           <div className="empty">
             <div className="empty-icon">📋</div>
-            <div className="empty-title">{filtroEstado !== "todas" || filtroModulo !== "todos" ? "Sin tareas con ese filtro" : "No hay tareas todavía"}</div>
-            <div className="empty-sub">{filtroEstado !== "todas" || filtroModulo !== "todos" ? "Probá cambiando los filtros" : "El docente aún no asignó tareas"}</div>
+            <div className="empty-title">{filtroEstado !== "ninguno" || filtroModulo !== "todos" ? "Sin tareas con ese filtro" : "No hay tareas todavía"}</div>
+            <div className="empty-sub">{filtroEstado !== "ninguno" || filtroModulo !== "todos" ? "Probá cambiando los filtros" : "El docente aún no asignó tareas"}</div>
           </div>
         ) : estructura.map(({ curso, modulosDeCurso, tareasSinModulo }) => (
           <div key={curso.id} style={{ marginBottom: 40 }}>

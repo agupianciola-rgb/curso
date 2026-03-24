@@ -634,11 +634,6 @@ function AlumnoView({ profile }) {
   );
 }
 
-      {selected && <VideoModal entrega={selected} profile={profile} onClose={() => setSelected(null)} onEvaluar={async () => {}} />}
-    </main>
-  );
-}
-
 // ── Inline Edit Row ────────────────────────────────────────
 function EditableRow({ children, fields, onSave, onDelete, deleteConfirm }) {
   const [editing, setEditing] = useState(false);

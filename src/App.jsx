@@ -151,8 +151,8 @@ const CSS = `
   /* Equipo badge */
   .equipo-chip { display:inline-flex; align-items:center; font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; background:var(--teal-bg); color:var(--teal); border:1px solid rgba(45,212,191,0.2); }
   /* Modal */
-  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeIn 0.15s ease; }
-  .modal { background:var(--bg2); border:1px solid var(--border2); border-radius:var(--radius-lg); width:100%; max-width:800px; overflow:hidden; animation:slideUp 0.2s ease; }
+  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.85); display:flex; align-items:flex-start; justify-content:center; padding:24px; overflow-y:auto; animation:fadeIn 0.15s ease; }
+  .modal { background:var(--bg2); border:1px solid var(--border2); border-radius:var(--radius-lg); width:100%; max-width:800px; overflow:hidden; animation:slideUp 0.2s ease; margin:auto; }
   .modal-header { display:flex; align-items:flex-start; justify-content:space-between; padding:20px 24px 0; }
   .modal-title { font-weight:500; font-size:16px; }
   .modal-close { background:none; border:none; color:var(--text2); cursor:pointer; font-size:20px; padding:0 0 0 16px; }
@@ -576,6 +576,11 @@ function AlumnoView({ profile }) {
     if (filtroEstado === "aprobado") return entrega?.estado === "aprobado";
     if (filtroEstado === "pendiente") return entrega?.estado === "pendiente";
     if (filtroEstado === "desaprobado") return entrega?.estado === "desaprobado";
+    if (filtroEstado === "rehacer") {
+      // rehacer puede estar en la entrega activa O en alguna entrega de esa tarea
+      const todasDeEsta = entregas.filter(e => e.tarea_id === tarea.id);
+      return todasDeEsta.some(e => e.estado === "rehacer");
+    }
     if (filtroEstado === "sinentrega") return !entrega;
     return true;
   }

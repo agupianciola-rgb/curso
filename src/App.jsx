@@ -1641,7 +1641,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
         </select>
         <select className="form-select" style={{ maxWidth: 220 }} value={filterTarea} onChange={e => setFilterTarea(e.target.value)}>
           <option value="todas">Todas las tareas</option>
-          {tareasFiltradas.map(t => <option key={t.id} value={t.id}>{t.titulo}</option>)}
+          {tareasFiltradas.map(t => <option key={t.id} value={t.id}>{t.orden ? `#${t.orden} — ` : ""}{t.titulo}</option>)}
         </select>
         <select className="form-select" style={{ maxWidth: 180 }} value={filterEquipo} onChange={e => { setFilterEquipo(e.target.value); setFilterAlumno("todos"); }}>
           <option value="todos">Todos los equipos</option>

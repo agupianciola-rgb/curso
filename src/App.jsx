@@ -1569,13 +1569,12 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
   const [filterModulo, setFilterModulo] = useState("todos");
   const [filterTarea, setFilterTarea] = useState("todas");
   const [filterEquipo, setFilterEquipo] = useState("todos");
+  const [filterAlumno, setFilterAlumno] = useState("todos");
   const [selected, setSelected] = useState(null);
 
   async function handleEvaluar(id, estadoSolicitado, comentario) {
-    // Buscar la entrega para saber si es 1er o 2do intento
     const entrega = entregas.find(e => e.id === id);
     let estadoFinal = estadoSolicitado;
-    // Si el docente desaprueba y es el 1er intento → rehacer
     if (estadoSolicitado === "desaprobado" && (entrega?.intento || 1) === 1) {
       estadoFinal = "rehacer";
     }
@@ -1594,6 +1593,15 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
     : tareas.filter(t => t.modulo_id === filterModulo);
   const equiposFiltrados = filterCurso === "todos" ? equipos : equipos.filter(eq => eq.curso_id === filterCurso);
 
+  // Alumnos únicos de las entregas asignadas al docente, ordenados por fullName
+  const alumnosFiltrados = [...new Map(
+    entregas
+      .filter(e => e.profiles)
+      .map(e => [e.alumno_id, e.profiles])
+  ).entries()]
+    .map(([id, p]) => ({ id, ...p }))
+    .sort((a, b) => fullName(a).localeCompare(fullName(b)));
+
   const lista = entregas.filter(e => {
     if (filterEstado !== "todas" && e.estado !== filterEstado) return false;
     if (filterCurso !== "todos" && e.curso_id !== filterCurso) return false;
@@ -1603,6 +1611,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
     }
     if (filterTarea !== "todas" && e.tarea_id !== filterTarea) return false;
     if (filterEquipo !== "todos" && e.equipo_id !== filterEquipo) return false;
+    if (filterAlumno !== "todos" && e.alumno_id !== filterAlumno) return false;
     return true;
   });
 
@@ -1613,7 +1622,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
     <>
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {!sinFiltroCurso && (
-          <select className="form-select" style={{ maxWidth: 180 }} value={filterCurso} onChange={e => { setFilterCurso(e.target.value); setFilterModulo("todos"); setFilterTarea("todas"); setFilterEquipo("todos"); }}>
+          <select className="form-select" style={{ maxWidth: 180 }} value={filterCurso} onChange={e => { setFilterCurso(e.target.value); setFilterModulo("todos"); setFilterTarea("todas"); setFilterEquipo("todos"); setFilterAlumno("todos"); }}>
             <option value="todos">Todos los cursos</option>
             {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
@@ -1626,9 +1635,13 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
           <option value="todas">Todas las tareas</option>
           {tareasFiltradas.map(t => <option key={t.id} value={t.id}>{t.titulo}</option>)}
         </select>
-        <select className="form-select" style={{ maxWidth: 180 }} value={filterEquipo} onChange={e => setFilterEquipo(e.target.value)}>
+        <select className="form-select" style={{ maxWidth: 180 }} value={filterEquipo} onChange={e => { setFilterEquipo(e.target.value); setFilterAlumno("todos"); }}>
           <option value="todos">Todos los equipos</option>
           {equiposFiltrados.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
+        </select>
+        <select className="form-select" style={{ maxWidth: 200 }} value={filterAlumno} onChange={e => setFilterAlumno(e.target.value)}>
+          <option value="todos">Todos los alumnos</option>
+          {alumnosFiltrados.map(a => <option key={a.id} value={a.id}>{fullName(a)}</option>)}
         </select>
       </div>
 

@@ -25,6 +25,13 @@ function formatDatetime(d) {
   return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function isVencida(f) { return f ? new Date(f) < new Date() : false; }
+function fullName(obj) {
+  if (!obj) return "Alumno";
+  const cap = s => s ? s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : "";
+  const nombre = cap(obj.nombre || "");
+  const apellido = cap(obj.apellido || "");
+  return [nombre, apellido].filter(Boolean).join(" ") || "Alumno";
+}
 
 // Resuelve qué docente corresponde a una entrega según la matriz de asignaciones
 async function resolveDocente(cursoId, equipoId, moduloId) {
@@ -462,7 +469,7 @@ function VideoModal({ entrega, profile, onClose, onEvaluar }) {
                 {entrega.tareas?.descripcion && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 3, lineHeight: 1.5 }}>{entrega.tareas.descripcion}</div>}
               </div>
             )}
-            {entrega.profiles && <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2 }}>por {entrega.profiles?.nombre}</div>}
+            {entrega.profiles && <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2 }}>por {fullName(entrega.profiles)}</div>}
             {entrega.equipo && <div style={{ marginTop: 4 }}><span className="equipo-chip">👥 {entrega.equipo}</span></div>}
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
@@ -944,7 +951,7 @@ function AlumnoView({ profile }) {
     <main className="main">
       <div className="page-title">Mis tareas</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-        <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {profile.nombre}</span>
+        <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {fullName(profile)}</span>
         {miEquipo && <span className="equipo-chip">👥 {miEquipo.nombre}</span>}
       </div>
 
@@ -1445,7 +1452,7 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
 
   async function loadMiembros() {
     if (equipos.length === 0) return;
-    const { data } = await supabase.from("equipo_miembros").select("*, profiles(id, nombre, email)");
+    const { data } = await supabase.from("equipo_miembros").select("*, profiles(id, nombre, apellido, email)");
     if (data) setMiembros(data);
   }
   async function crear(e) {
@@ -1532,7 +1539,7 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
                   {mbs.map(m => (
                     <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "var(--bg3)", borderRadius: 8, marginBottom: 4 }}>
                       <div>
-                        <span style={{ fontSize: 14 }}>{m.profiles?.nombre}</span>
+                        <span style={{ fontSize: 14 }}>{fullName(m.profiles)}</span>
                         <span style={{ fontSize: 12, color: "var(--text3)", marginLeft: 8 }}>{m.profiles?.email}</span>
                       </div>
                       <button className="btn btn-ghost btn-sm" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => quitarMiembro(m.id)}>Quitar</button>
@@ -1542,7 +1549,7 @@ function TabEquipos({ cursos, equipos, alumnos, reload }) {
                     <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                       <select className="form-select" style={{ fontSize: 13 }} value={addAlumno[eq.id] || ""} onChange={e => setAddAlumno(a => ({ ...a, [eq.id]: e.target.value }))}>
                         <option value="">+ Agregar alumno...</option>
-                        {disponibles.map(a => <option key={a.id} value={a.id}>{a.nombre} — {a.email}</option>)}
+                        {disponibles.map(a => <option key={a.id} value={a.id}>{fullName(a)} — {a.email}</option>)}
                       </select>
                       <button className="btn btn-ghost btn-sm" onClick={() => agregarMiembro(eq.id, addAlumno[eq.id])}>Agregar</button>
                     </div>
@@ -1652,7 +1659,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
                       alt="" loading="lazy" />
                     <div className="entrega-row-info">
                       <div className="entrega-row-name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {entrega.profiles?.nombre || "Alumno"}
+                        {fullName(entrega.profiles)}
                         {(entrega.intento || 1) === 2 && <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(96,165,250,0.15)", color: "var(--blue)", border: "1px solid rgba(96,165,250,0.3)", padding: "1px 6px", borderRadius: 10 }}>2do intento</span>}
                       </div>
                       <div className="entrega-row-sub">
@@ -1696,7 +1703,7 @@ function DocenteView({ profile }) {
       cursoId ? supabase.from("tareas").select("*").eq("curso_id", cursoId).order("orden", { ascending: true }) : Promise.resolve({ data: [] }),
       cursoId ? supabase.from("equipos").select("*").eq("curso_id", cursoId).order("nombre") : Promise.resolve({ data: [] }),
       supabase.from("entregas")
-        .select("*, profiles!entregas_alumno_id_fkey(nombre, email), cursos(nombre), tareas(titulo, descripcion)")
+        .select("*, profiles!entregas_alumno_id_fkey(nombre, apellido, email), cursos(nombre), tareas(titulo, descripcion)")
         .eq("docente_asignado_id", profile.id)
         .order("created_at", { ascending: false }),
     ]);
@@ -1727,7 +1734,7 @@ function DocenteView({ profile }) {
     <main className="main">
       <div className="page-title">Panel docente</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
-        <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {profile.nombre}</span>
+        <span className="page-sub" style={{ marginBottom: 0 }}>Hola, {fullName(profile)}</span>
         {cursoVigenteData && <span className="vigente-chip">📚 {cursoVigenteData.nombre}</span>}
       </div>
 
@@ -1935,7 +1942,7 @@ function AdminView({ profile }) {
   return (
     <main className="main">
       <div className="page-title">Panel administrador</div>
-      <div className="page-sub">Hola, {profile.nombre} — gestioná los contenidos del curso</div>
+      <div className="page-sub">Hola, {fullName(profile)} — gestioná los contenidos del curso</div>
 
       <div className="grid-4" style={{ marginBottom: 32 }}>
         <div className="stat-card"><div className="stat-num">{cursos.length}</div><div className="stat-label">Cursos</div></div>
@@ -1977,7 +1984,7 @@ function Navbar({ profile }) {
     <nav className="nav">
       <img src={LOGO} alt="Logo" style={{ height: 36, display: "block" }} />
       <div className="nav-right">
-        {profile && <><span className="nav-user">{profile.nombre}</span><span className={`nav-role ${profile.rol}`}>{profile.rol}</span></>}
+        {profile && <><span className="nav-user">{fullName(profile)}</span><span className={`nav-role ${profile.rol}`}>{profile.rol}</span></>}
         {profile && (
           <a href={instructivoUrl} target="_blank" rel="noopener noreferrer"
             className="btn btn-ghost btn-sm"

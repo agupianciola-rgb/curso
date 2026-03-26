@@ -1591,12 +1591,20 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
   const tareasFiltradas = filterModulo === "todos"
     ? (filterCurso === "todos" ? tareas : tareas.filter(t => t.curso_id === filterCurso))
     : tareas.filter(t => t.modulo_id === filterModulo);
-  const equiposFiltrados = filterCurso === "todos" ? equipos : equipos.filter(eq => eq.curso_id === filterCurso);
+  // Equipos que tienen al menos una entrega asignada al docente
+  const equiposConEntregas = [...new Map(
+    entregas
+      .filter(e => e.equipo_id)
+      .filter(e => filterAlumno === "todos" || e.alumno_id === filterAlumno)
+      .map(e => [e.equipo_id, equipos.find(eq => eq.id === e.equipo_id)])
+      .filter(([, eq]) => eq)
+  ).entries()].map(([, eq]) => eq).sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-  // Alumnos únicos de las entregas asignadas al docente, ordenados por fullName
+  // Alumnos únicos de las entregas asignadas al docente, filtrados por equipo si corresponde
   const alumnosFiltrados = [...new Map(
     entregas
       .filter(e => e.profiles)
+      .filter(e => filterEquipo === "todos" || e.equipo_id === filterEquipo)
       .map(e => [e.alumno_id, e.profiles])
   ).entries()]
     .map(([id, p]) => ({ id, ...p }))
@@ -1637,7 +1645,7 @@ function TabEntregas({ entregas, tareas, modulos, cursos, equipos, profile, filt
         </select>
         <select className="form-select" style={{ maxWidth: 180 }} value={filterEquipo} onChange={e => { setFilterEquipo(e.target.value); setFilterAlumno("todos"); }}>
           <option value="todos">Todos los equipos</option>
-          {equiposFiltrados.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
+          {equiposConEntregas.map(eq => <option key={eq.id} value={eq.id}>{eq.nombre}</option>)}
         </select>
         <select className="form-select" style={{ maxWidth: 200 }} value={filterAlumno} onChange={e => setFilterAlumno(e.target.value)}>
           <option value="todos">Todos los alumnos</option>

@@ -2011,6 +2011,29 @@ function TabNotas({ cursos, modulos, tareas, alumnos }) {
     return <span className={cls}>{(val * 100).toFixed(1)}%</span>;
   }
 
+  function exportarExcel() {
+    // Construir CSV con BOM para que Excel lo abra bien con tildes
+    const bom = '\uFEFF';
+    const headers = ['Alumno', 'Email', ...modulosVigentes.map(m => m.nombre), 'Promedio (%)'];
+    const csvRows = [headers.join(',')];
+    rows.forEach(({ alumno, puntosModulo, promedio }) => {
+      const cols = [
+        `"${fullName(alumno)}"`,
+        `"${alumno.email}"`,
+        ...puntosModulo.map(p => p === null ? '—' : p),
+        (promedio * 100).toFixed(1),
+      ];
+      csvRows.push(cols.join(','));
+    });
+    const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notas_${cursoVigente.nombre.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
@@ -2020,6 +2043,9 @@ function TabNotas({ cursos, modulos, tareas, alumnos }) {
             {rows.length} alumnos · {totalTareas} tareas · puntos: 1 (aprobado 1er intento) · 0.5 (aprobado 2do) · 0 (desaprobado / sin entrega)
           </div>
         </div>
+        <button className="btn btn-ghost btn-sm" onClick={exportarExcel} style={{ flexShrink: 0 }}>
+          ↓ Exportar Excel
+        </button>
       </div>
 
       <div className="notas-table-wrap">

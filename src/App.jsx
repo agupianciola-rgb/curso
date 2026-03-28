@@ -198,6 +198,19 @@ const CSS = `
   .matrix-table td select { background:var(--bg3); border:1px solid var(--border2); border-radius:6px; padding:4px 8px; color:var(--text); font-size:12px; font-family:inherit; outline:none; width:100%; min-width:130px; cursor:pointer; }
   .matrix-table td select:focus { border-color:var(--accent2); }
   .matrix-default-row td { background:rgba(232,213,163,0.03); }
+  .notas-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .notas-table { width:100%; border-collapse:collapse; font-size:13px; min-width:700px; }
+  .notas-table th { background:var(--bg3); color:var(--text3); font-weight:600; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; padding:10px 14px; border-bottom:1px solid var(--border2); text-align:left; white-space:nowrap; }
+  .notas-table td { padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .notas-table tr:last-child td { border-bottom:none; }
+  .notas-table tr:hover td { background:var(--bg3); }
+  .nota-chip { display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; padding:3px 10px; border-radius:20px; min-width:36px; }
+  .nota-full { background:rgba(74,222,128,0.1); color:var(--green); border:1px solid rgba(74,222,128,0.2); }
+  .nota-half { background:rgba(251,191,36,0.1); color:var(--amber); border:1px solid rgba(251,191,36,0.2); }
+  .nota-zero { background:var(--bg3); color:var(--text3); border:1px solid var(--border2); }
+  .nota-prom-good { color:var(--green); font-weight:700; }
+  .nota-prom-mid { color:var(--amber); font-weight:700; }
+  .nota-prom-low { color:var(--red); font-weight:700; }
   /* Auth */
   .auth-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
   .auth-card { width:100%; max-width:420px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px; }
@@ -1920,6 +1933,125 @@ function TabAsignaciones({ cursos, equipos, modulos, docentes, reload }) {
   );
 }
 
+// ── Tab Notas (admin) ──────────────────────────────────────
+function TabNotas({ cursos, modulos, tareas, alumnos }) {
+  const [entregas, setEntregas] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const cursoVigente = cursos.find(c => c.vigente);
+  const modulosVigentes = modulos
+    .filter(m => m.curso_id === cursoVigente?.id)
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+    .slice(0, 4); // máx 4 módulos
+  const tareasVigentes = tareas.filter(t => t.curso_id === cursoVigente?.id);
+  const totalTareas = tareasVigentes.length;
+
+  useEffect(() => {
+    if (!cursoVigente) { setLoading(false); return; }
+    setLoading(true);
+    supabase.from("entregas")
+      .select("alumno_id, tarea_id, estado, intento")
+      .eq("curso_id", cursoVigente.id)
+      .then(({ data }) => {
+        if (data) setEntregas(data);
+        setLoading(false);
+      });
+  }, [cursoVigente?.id]);
+
+  if (!cursoVigente) return <div className="empty"><div className="empty-icon">📊</div><div className="empty-title">No hay curso vigente</div></div>;
+  if (loading) return <div className="loading-center"><Spinner /> Cargando notas...</div>;
+
+  // Calcular puntos de una entrega
+  function puntos(entrega) {
+    if (!entrega) return 0;
+    if (entrega.estado === "aprobado" && (entrega.intento || 1) === 1) return 1;
+    if (entrega.estado === "aprobado" && entrega.intento === 2) return 0.5;
+    return 0;
+  }
+
+  function NotaChip({ valor }) {
+    if (valor === null) return <span className="nota-chip nota-zero">—</span>;
+    const cls = valor >= 1 ? "nota-full" : valor >= 0.5 ? "nota-half" : "nota-zero";
+    return <span className={`nota-chip ${cls}`}>{valor % 1 === 0 ? valor : valor.toFixed(1)}</span>;
+  }
+
+  // Calcular filas — ordenar alumnos por apellido + nombre
+  const rows = [...alumnos]
+    .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+    .map(alumno => {
+      // Entregas de este alumno (solo 1ra o 2da más reciente por tarea)
+      const entregasAlumno = entregas.filter(e => e.alumno_id === alumno.id);
+
+      // Por tarea: tomar la entrega más relevante (2do intento si existe, sino 1ro)
+      const porTarea = {};
+      entregasAlumno.forEach(e => {
+        const prev = porTarea[e.tarea_id];
+        if (!prev || (e.intento || 1) > (prev.intento || 1)) {
+          porTarea[e.tarea_id] = e;
+        }
+      });
+
+      // Puntos por módulo
+      const puntosModulo = modulosVigentes.map(mod => {
+        const tareasDelMod = tareasVigentes.filter(t => t.modulo_id === mod.id);
+        if (tareasDelMod.length === 0) return null;
+        return tareasDelMod.reduce((sum, t) => sum + puntos(porTarea[t.id] || null), 0);
+      });
+
+      // Promedio total
+      const totalPuntos = Object.values(porTarea).reduce((sum, e) => sum + puntos(e), 0);
+      const promedio = totalTareas > 0 ? totalPuntos / totalTareas : 0;
+
+      return { alumno, puntosModulo, promedio, totalPuntos };
+    });
+
+  function PromChip({ val }) {
+    const pct = val * 100;
+    const cls = pct >= 70 ? "nota-prom-good" : pct >= 40 ? "nota-prom-mid" : "nota-prom-low";
+    return <span className={cls}>{(val * 100).toFixed(1)}%</span>;
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div className="section-title">Notas — {cursoVigente.nombre}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
+            {rows.length} alumnos · {totalTareas} tareas · puntos: 1 (aprobado 1er intento) · 0.5 (aprobado 2do) · 0 (desaprobado / sin entrega)
+          </div>
+        </div>
+      </div>
+
+      <div className="notas-table-wrap">
+        <table className="notas-table">
+          <thead>
+            <tr>
+              <th>Alumno</th>
+              <th>Email</th>
+              {modulosVigentes.map(m => <th key={m.id}>{m.nombre}</th>)}
+              <th style={{ textAlign: "center" }}>Promedio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ alumno, puntosModulo, promedio }) => (
+              <tr key={alumno.id}>
+                <td style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{fullName(alumno)}</td>
+                <td style={{ color: "var(--text3)", fontSize: 12 }}>{alumno.email}</td>
+                {puntosModulo.map((pts, i) => (
+                  <td key={i} style={{ textAlign: "center" }}>
+                    {pts === null ? <span style={{ color: "var(--text3)", fontSize: 12 }}>—</span> : <NotaChip valor={pts} />}
+                  </td>
+                ))}
+                <td style={{ textAlign: "center" }}><PromChip val={promedio} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Admin View (ABMs) ──────────────────────────────────────
 function AdminView({ profile }) {
   const [tab, setTab] = useState("cursos");
@@ -1958,6 +2090,7 @@ function AdminView({ profile }) {
     { id: "tareas", label: "Tareas" },
     { id: "equipos", label: "Equipos" },
     { id: "asignaciones", label: "Asignaciones" },
+    { id: "notas", label: "Notas" },
   ];
 
   return (
@@ -1987,6 +2120,7 @@ function AdminView({ profile }) {
           {tab === "tareas" && <TabTareas cursos={cursos} modulos={modulos} tareas={tareas} reload={loadData} />}
           {tab === "equipos" && <TabEquipos cursos={cursos} equipos={equipos} alumnos={alumnos} reload={loadData} />}
           {tab === "asignaciones" && <TabAsignaciones cursos={cursos} equipos={equipos} modulos={modulos} docentes={docentes} reload={loadData} />}
+          {tab === "notas" && <TabNotas cursos={cursos} modulos={modulos} tareas={tareas} alumnos={alumnos} />}
         </>
       )}
     </main>
